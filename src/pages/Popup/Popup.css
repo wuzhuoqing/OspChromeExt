@@ -11,7 +11,7 @@
 }
 
 .App-logo {
-  height: 30vmin;
+  height: 10vmin;
   pointer-events: none;
 }
 
@@ -39,6 +39,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
