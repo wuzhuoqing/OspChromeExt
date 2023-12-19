@@ -1,14 +1,28 @@
-import React from 'react';
+import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
+import "ag-grid-community/styles/ag-grid.css"; // Core CSS
+import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
+
+import React, {
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  StrictMode,
+} from 'react';
+
 import styled from 'styled-components';
 import logo from '../../assets/img/logo.svg';
 import Greetings from '../../containers/Greetings/Greetings';
 import './Popup.css';
 
+import * as BrExtHelper from './modules/BrExtHelper';
+import * as OspHelper from './modules/OspHelper';
+
 const Button = styled.button`
   background-color: #4CAF50; /* Green */
   border: none;
   color: white;
-  padding: 12px 12px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
@@ -18,151 +32,128 @@ const Button = styled.button`
   border-radius: 5px;
 `;
 
-async function queryOSPMember() {
-  const response = await fetch('/PtaMembership/GetOSPLocalPtaMembers', {
-    method: 'POST',
-  })
-    .then(response => response.json())
-    .catch(error => console.error(error));
-
-  return response;
-}
-
-async function getCurrentTabId() {
-  let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  let currTab = tabs[0];
-  return currTab.id;
-}
-
-async function loadOSPMember() {
-  console.log("loadOSPMember called");
-
-  let currentTabId = await getCurrentTabId();
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: queryOSPMember,
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0 && result && result.length && result.length > 0) {
-
-        }
-      }
-    });
-}
-
-
-async function queryMemberPlanetMember() {
-  console.log('queryMemberPlanetMember called')
-  if (!window.sessionStorage || !window.sessionStorage.appData) {
-    return;
-  }
-
-  let appDataString = JSON.parse(window.sessionStorage.appData);
-  let appData = JSON.parse(appDataString);
-  // console.log('parse data called', window.sessionStorage.appData, appData.accessToken);
-  if (!appData.accessToken) {
-    return;
-  }
-
-  function sleepAsync(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  let authHeader = "Bearer " + appData.accessToken;
-  let ret = []
-  let pageNumIndex = 0;
-  while (true) {
-    let requestObj = {
-      Fields: [],
-      OrgLevelMappingIds: [],
-      NonStandardFields: [],
-      SortField: {
-        SortFieldId: "34",
-        IsAsc: true,
-        IsCustom: false,
-        IsEventCustom: false,
-        IsEventTicket: false
-      },
-      KendoSortObject: {
-        field: "groupmemberspk",
-        dir: "asc"
-      },
-      PageNo: pageNumIndex,
-      PageSize: 100,
-      CustomFieldIds: [],
-      MatchType: "AND",
-      SearchType: "Members",
-      IsOrganizationTreeEnabled: false,
-      IsMultiRowEnabled: false,
-      CanUseSets: false
-    }
-
-    const responseObj = await fetch('https://api.memberplanet.com/api/Member/MemberDatabaseSearch', {
-      method: 'POST',
-      body: JSON.stringify(requestObj),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader
-      }
-    })
-      .then(response => response.json())
-      .catch(error => console.error(error));
-    if (!responseObj || !responseObj.Members) {
-      // not getting back correct response
-      break;
-    }
-
-    for (const member of responseObj.Members) {
-      ret.push({
-        Firstname: member.firstname,
-        Lastname: member.lastname,
-        Address: member.streetaddress,
-        Email: member.email,
-        IsActive: member.IsActive,
-        MPIDNumber: member.groupmemberspk,
-        Status: 'Unknown',
-        MemberLevel: member.LevelName
-      });
-    }
-    // limit to max 100 K members.
-    if (ret.length >= responseObj.total || pageNumIndex >= 1000) {
-      break;
-    }
-
-    await sleepAsync(500);
-    pageNumIndex++;
-  }
-  return ret;
-}
-
-async function loadMemberPlanetMember() {
-  console.log("loadMemberPlanetMember called");
-
-  let currentTabId = await getCurrentTabId();
-  chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: queryMemberPlanetMember,
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0 && result && result.length && result.length > 0) {
-          console.log(result);
-        }
-      }
-    });
-}
-
 const Popup = () => {
+  const gridStyle = useMemo(() => ({ height: '400px', width: '100%' }), []);
+  const autoSizeStrategy = {
+    type: 'fitCellContents'
+  };
+  let ospMemberList = [];
+  let mpMemberList = [];
+
+  const [rowDataOsp, setRowDataOsp] = useState(ospMemberList);
+  const [columnDefsOsp, setColumnDefsOsp] = useState([
+    { field: 'ID', headerCheckboxSelection: true, checkboxSelection: true },
+    { field: 'Status' },
+    { field: 'Email' },
+    { field: 'FirstName' },
+    { field: 'LastName' },
+    { field: 'IsStudent' },
+    { field: 'Address' },
+    { field: 'City' },
+    { field: 'ZipCode' },
+    { field: 'State' },
+  ]);
+  const getRowIdOsp = useMemo(() => {
+    return (params) => params.data.ID;
+  }, []);
+
+  const [ospInfoText, setOspInfoText] = useState('This is my first text!');
+  const [rowDataMp, setRowDataMp] = useState(mpMemberList);
+  const [columnDefsMp, setColumnDefsMp] = useState([
+    { field: 'MPID', headerCheckboxSelection: true, checkboxSelection: true },
+    { field: 'Status' },
+    { field: 'Email' },
+    { field: 'FirstName' },
+    { field: 'LastName' },
+    { field: 'Address' },
+  ]);
+
+  const getRowIdMp = useMemo(() => {
+    return (params) => params.data.MPID;
+  }, []);
+
+  function popupHandleMessages(message) {
+    if (message.MemberListUpdated) {
+      BrExtHelper.log(message);
+      setRowDataMp(message.mpMemberList);
+      setRowDataOsp(message.ospMemberList);
+    }
+  }
+
+  function initRunFunc() {
+    requestMemberListFromBackgroud();
+    chrome.runtime.onMessage.addListener(popupHandleMessages);
+  }
+
+  function requestMemberListFromBackgroud() {
+    chrome.runtime.sendMessage({
+      RequestMemberList: true
+    });
+  }
+
+  const loadOSPMember = OspHelper.oneInstanceRunWrapper(async () => {
+    await OspHelper.loadOSPMember();
+  });
+
+  const loadMemberPlanetMember = OspHelper.oneInstanceRunWrapper(async () => {
+    await OspHelper.loadMemberPlanetMember();
+  });
+
+  const syncMember = OspHelper.oneInstanceRunWrapper(async () => {
+    await OspHelper.syncMember();
+  });
+
+  useEffect(
+    initRunFunc, // <- function that will run on every dependency update
+    [] // <-- empty dependency array
+  );
+
   return (
     <div className="App">
-      <header className="App-header">
-        <p>
-          On OSP Admin Page load members. On MemberPlanet Page load members. Choose rows to upload.
-        </p>
-      </header>
-      <Button onClick={loadOSPMember}>load OSP Members</Button>
-      <Button onClick={loadMemberPlanetMember}>load MemberPlanet Members</Button>
+      <div className="ospinfo-container">
+        {ospInfoText}
+      </div>
+      <div className="mpsync-container">
+        <Button onClick={syncMember}>Sync Members</Button>
+      </div>
+      <div className="mplist-container">
+        <div>
+          <div>
+            <Button onClick={loadOSPMember}>Load OSP Members</Button>
+          </div>
+          <div style={gridStyle}
+            className={
+              "ag-theme-quartz"
+            }>
+            <AgGridReact
+              autoSizeStrategy={autoSizeStrategy}
+              rowData={rowDataOsp}
+              columnDefs={columnDefsOsp}
+              rowSelection={'multiple'}
+              rowMultiSelectWithClick={true}
+              getRowId={getRowIdOsp}
+            />
+          </div>
+        </div>
+        <div>
+          <div>
+            <Button onClick={loadMemberPlanetMember}>Load MP Members</Button>
+          </div>
+          <div style={gridStyle}
+            className={
+              "ag-theme-quartz"
+            }>
+            <AgGridReact
+              autoSizeStrategy={autoSizeStrategy}
+              rowData={rowDataMp}
+              columnDefs={columnDefsMp}
+              rowSelection={'multiple'}
+              rowMultiSelectWithClick={true}
+              getRowId={getRowIdMp}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

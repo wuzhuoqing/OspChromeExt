@@ -1,5 +1,4 @@
 .App {
-  position: absolute;
   top: 0px;
   bottom: 0px;
   left: 0px;
@@ -7,7 +6,6 @@
   text-align: center;
   height: 100%;
   padding: 10px;
-  background-color: #282c34;
 }
 
 .App-logo {
@@ -33,6 +31,14 @@
 
 .App-link {
   color: #61dafb;
+}
+
+.ag-header-cell-label {
+  justify-content: center;
+}
+
+.mplist-container {
+  justify-content: space-between;
 }
 
 @keyframes App-logo-spin {
