@@ -29,6 +29,14 @@
   color: white;
 }
 
+div.ospinfo-container>h5 {
+  color: red;
+}
+
+div.mpsync-container>input {
+  max-width: 30px;
+}
+
 .App-link {
   color: #61dafb;
 }

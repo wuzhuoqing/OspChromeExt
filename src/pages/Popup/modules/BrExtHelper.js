@@ -1,41 +1,4 @@
-import secrets from 'secrets';
-
-let extraWaitTimeMs = 0;
-
-export function setExtraWaitTimeMs(timeMS) {
-  extraWaitTimeMs = timeMS;
-}
-
-export async function getCurrentTab() {
-  let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  let currTab = tabs[0];
-  return currTab;
-}
-
-export async function getCurrentTabId() {
-  let currTab = await getCurrentTab();
-  return currTab.id;
-}
-
-export async function executeFuncInContent(currentTabId, func, world = 'ISOLATED') {
-  log("executeFuncInContent called");
-  let ret;
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: func,
-    world: world
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("executeFuncInContent returned");
-          ret = result;
-        }
-      }
-    });
-
-  return ret;
-}
+import * as OspUtil from './OspUtil';
 
 async function waitForElmInContent(selector) {
   let elePromise = new Promise(resolve => {
@@ -59,55 +22,10 @@ async function waitForElmInContent(selector) {
   return selector;
 }
 
-export async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export async function waitForElm(currentTabId, selector) {
-  log("waitForElm called", selector);
-
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: waitForElmInContent,
-    args: [selector]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("waitForElm returned", result);
-        }
-      }
-    });
-
-  if (extraWaitTimeMs > 0) {
-    await sleep(extraWaitTimeMs);
-  }
-}
-
 async function clickElmInContent(selector) {
   let ele = document.querySelector(selector);
   ele.click();
   return selector;
-}
-
-export async function clickElm(currentTabId, selector, world = 'ISOLATED') {
-  log('clickElm called', selector, world);
-
-  await waitForElm(currentTabId, selector);
-
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: clickElmInContent,
-    args: [selector],
-    world: world,
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("clickElm returned", result);
-        }
-      }
-    });
 }
 
 async function setElmTextInContent(selector, strText) {
@@ -116,49 +34,11 @@ async function setElmTextInContent(selector, strText) {
   return selector;
 }
 
-export async function setElmText(currentTabId, selector, strText) {
-  log('setElmText called', selector, strText);
-
-  await waitForElm(currentTabId, selector);
-
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: setElmTextInContent,
-    args: [selector, strText]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("setElmText returned", result);
-        }
-      }
-    });
-}
-
 async function selectOptionIndexInContent(selector, index) {
   let ele = document.querySelector(selector);
   ele.selectedIndex = index;
   ele.dispatchEvent(new Event('change', { bubbles: true }));
   return selector;
-}
-
-export async function selectOptionIndex(currentTabId, selector, index) {
-  log('selectOptionIndex called', selector, index);
-
-  await waitForElm(currentTabId, selector);
-
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: selectOptionIndexInContent,
-    args: [selector, index]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("selectOptionIndex returned", result);
-        }
-      }
-    });
 }
 
 async function getSelectOptionTextInContent(selector) {
@@ -170,28 +50,6 @@ async function getSelectOptionTextInContent(selector) {
       break;
     }
   }
-  return optText;
-}
-
-export async function getSelectOptionText(currentTabId, selector) {
-  log('getSelectOptionText called', selector);
-
-  await waitForElm(currentTabId, selector);
-
-  let optText = '';
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: getSelectOptionTextInContent,
-    args: [selector]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("getSelectOptionText returned", result);
-          optText = result;
-        }
-      }
-    });
   return optText;
 }
 
@@ -207,28 +65,6 @@ async function getSelectOptionIndexInContent(selector) {
   return optIndex;
 }
 
-export async function getSelectOptionIndex(currentTabId, selector) {
-  log('getSelectOptionIndex called', selector);
-
-  await waitForElm(currentTabId, selector);
-
-  let optIndex = -1;
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: getSelectOptionIndexInContent,
-    args: [selector]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("getSelectOptionIndex returned", result);
-          optIndex = result;
-        }
-      }
-    });
-  return optIndex;
-}
-
 async function selectOptionByTextInContent(selector, optText) {
   let ele = document.querySelector(selector);
   for (var i = 0; i < ele.options.length; i++) {
@@ -241,74 +77,16 @@ async function selectOptionByTextInContent(selector, optText) {
   return selector;
 }
 
-export async function selectOptionByText(currentTabId, selector, optText) {
-  log('selectOptionByText called', selector, optText);
-
-  await waitForElm(currentTabId, selector);
-
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: selectOptionByTextInContent,
-    args: [selector, optText]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("selectOptionByText returned", result);
-        }
-      }
-    });
-}
-
 async function getEleTextInContent(selector) {
   let ele = document.querySelector(selector);
   return ele.innerText;
-}
-
-export async function getEleText(currentTabId, selector) {
-  log('getEleText called', selector);
-
-  await waitForElm(currentTabId, selector);
-
-  let eleText = '';
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTabId },
-    func: getEleTextInContent,
-    args: [selector]
-  })
-    .then(injectionResults => {
-      for (const { frameId, result } of injectionResults) {
-        if (frameId === 0) {
-          log("getEleText returned", result);
-          eleText = result;
-        }
-      }
-    });
-
-  return eleText;
-}
-
-export async function gotoUrl(currentTabId, url) {
-  await pageAction(currentTabId, async () => chrome.tabs.update(currentTabId, { url: url }));
-}
-
-export async function pageAction(currentTabId, action) {
-  let nextRequestPromise = getBrowserNextCompletePromise(currentTabId);
-  await action();
-  await nextRequestPromise
-}
-
-export async function ajaxAction(currentTabId, ajaxTargetUrl, action) {
-  let nextRequestPromise = getRequestNextCompletePromise(currentTabId, ajaxTargetUrl);
-  await action();
-  await nextRequestPromise
 }
 
 function getBrowserNextCompletePromise(curTabId) {
   let onUpdate;
   return new Promise((resolve) => {
     onUpdate = (tabId, info) => {
-      log("tab onUpdated called called", info);
+      OspUtil.log("tab onUpdated called called", info);
       if (tabId === curTabId && info.status === "complete") {
         resolve();
       }
@@ -321,20 +99,138 @@ function getRequestNextCompletePromise(curTabId, targetUrl) {
   let onCompleted;
   return new Promise((resolve) => {
     onCompleted = (details) => {
-      log("webrequest onCompleted called called", details);
+      OspUtil.log("webrequest onCompleted called called", details);
       resolve();
     };
     chrome.webRequest.onCompleted.addListener(onCompleted, { urls: [targetUrl] });
   }).then(() => chrome.webRequest.onCompleted.removeListener(onCompleted));
 }
 
-export function log(...args) {
-  if (!secrets.enableLog) {
-    return;
+export default class BrExtHelper {
+  constructor(curTabId) {
+    this.currentTabId = curTabId;
+    this.extraWaitTimeMs = 0;
+    this.abandoned = false;
   }
-  console.trace(...args);
+
+  abandonRemainingRequests() {
+    this.abandoned = true;
+  }
+
+  setExtraWaitTimeMs(timeMS) {
+    this.extraWaitTimeMs = timeMS;
+  }
+
+  static async getCurrentTab() {
+    let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    let currTab = tabs[0];
+    return currTab;
+  }
+
+  static async getCurrentTabId() {
+    let currTab = await this.getCurrentTab();
+    return currTab.id;
+  }
+
+  static async getCurrentTabUrl() {
+    let currTab = await this.getCurrentTab();
+    return currTab?.url || '';
+  }
+
+  async executeFuncInContent(func, argsArray = [], world = 'ISOLATED') {
+    if (this.abandoned) {
+      OspUtil.log("executeFuncInContent abandoned", func?.name, argsArray, world);
+      throw new Error(`executeFuncInContent abandoned ${func?.name}, ${argsArray}, ${world}`);
+    }
+
+    OspUtil.log("executeFuncInContent called", func?.name, argsArray, world);
+    let ret;
+    await chrome.scripting.executeScript({
+      target: { tabId: this.currentTabId },
+      func: func,
+      world: world,
+      args: argsArray
+    })
+      .then(injectionResults => {
+        for (const { frameId, result } of injectionResults) {
+          if (frameId === 0) {
+            OspUtil.log("executeFuncInContent returned", func?.name, argsArray, world, result);
+            ret = result;
+          }
+        }
+      });
+
+    return ret;
+  }
+
+
+  async waitForElm(selector) {
+    await this.executeFuncInContent(waitForElmInContent, [selector])
+
+    if (extraWaitTimeMs > 0) {
+      await OspUtil.sleep(extraWaitTimeMs);
+    }
+  }
+
+  async clickElm(selector, world = 'ISOLATED') {
+    await this.waitForElm(selector);
+    await this.executeFuncInContent(clickElmInContent, [selector], world);
+  }
+
+  async setElmText(selector, strText) {
+    await this.waitForElm(selector);
+    await this.executeFuncInContent(setElmTextInContent, [selector, strText]);
+  }
+
+  async selectOptionIndex(selector, index) {
+    await this.waitForElm(selector);
+    await this.executeFuncInContent(selectOptionIndexInContent, [selector, index]);
+  }
+
+
+  async getSelectOptionText(selector) {
+    await this.waitForElm(selector);
+
+    const optText = this.executeFuncInContent(getSelectOptionTextInContent, [selector]);
+    return optText;
+  }
+
+  async getSelectOptionIndex(selector) {
+    await this.waitForElm(selector);
+
+    const optIndex = await this.executeFuncInContent(getSelectOptionIndexInContent, [selector]);
+    return optIndex;
+  }
+
+
+  async selectOptionByText(selector, optText) {
+    await this.waitForElm(selector);
+
+    await this.executeFuncInContent(selectOptionByTextInContent, [selector, optText]);
+  }
+
+  async getEleText(selector) {
+
+    await this.waitForElm(selector);
+
+    const eleText = await this.executeFuncInContent(getEleTextInContent, [selector]);
+    return eleText;
+  }
+
+  async gotoUrl(url) {
+    await this.pageAction(async () => chrome.tabs.update(this.currentTabId, { url: url }));
+  }
+
+  async pageAction(action) {
+    let nextRequestPromise = getBrowserNextCompletePromise(this.currentTabId);
+    await action();
+    await nextRequestPromise
+  }
+
+  async ajaxAction(ajaxTargetUrl, action) {
+    let nextRequestPromise = getRequestNextCompletePromise(this.currentTabId, ajaxTargetUrl);
+    await action();
+    await nextRequestPromise
+  }
 }
 
-if (secrets.enableLog) {
-  log = console.log;
-}
