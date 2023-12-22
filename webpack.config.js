@@ -35,6 +35,8 @@ if (fileSystem.existsSync(secretsPath)) {
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+const outputFolderName = process.env.OSP_BUILD_OUT || 'build';
+
 var options = {
   mode: process.env.NODE_ENV || 'development',
   entry: {
@@ -51,7 +53,7 @@ var options = {
   },
   output: {
     filename: '[name].bundle.js',
-    path: path.resolve(__dirname, 'build'),
+    path: path.resolve(__dirname, outputFolderName),
     clean: true,
     publicPath: ASSET_PATH,
   },
@@ -142,7 +144,7 @@ var options = {
       patterns: [
         {
           from: 'src/manifest.json',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, outputFolderName),
           force: true,
           transform: function (content, path) {
             // generates the manifest file using the package.json informations
@@ -161,7 +163,7 @@ var options = {
       patterns: [
         {
           from: 'src/pages/Content/content.styles.css',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, outputFolderName),
           force: true,
         },
       ],
@@ -170,7 +172,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-128.png',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, outputFolderName),
           force: true,
         },
       ],
@@ -179,7 +181,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-34.png',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, outputFolderName),
           force: true,
         },
       ],
@@ -188,7 +190,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/*.gif',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, outputFolderName),
           force: true,
         },
       ],
