@@ -225,7 +225,7 @@ var options = {
     }),
   ].filter(Boolean),
   infrastructureLogging: {
-    level: 'info',
+    level: 'verbose',
   },
 };
 

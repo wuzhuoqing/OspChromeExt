@@ -35,11 +35,14 @@ console.log('before final webpack', __dirname);
 
 try {
   webpack(config, function (err) {
-    if (err) throw err;
+    if (err) {
+      console.error('failed to run webpack', err);
+      throw err;
+    }
   });
 }
 catch (err) {
-  console.error('failed to run webpack');
+  console.error('failed to run webpack', err);
   throw err;
 }
 console.log('end of final webpack', __dirname);
