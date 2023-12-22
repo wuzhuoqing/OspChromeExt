@@ -1,3 +1,9 @@
+if (process.env.OSP_BUILD_OUT) {
+  process.env.BABEL_ENV = 'production';
+  process.env.NODE_ENV = 'production';
+  process.env.ASSET_PATH = '/';
+}
+
 var webpack = require('webpack'),
   path = require('path'),
   fileSystem = require('fs-extra'),
@@ -227,6 +233,7 @@ var options = {
     }),
   ].filter(Boolean),
   infrastructureLogging: {
+    stream: process.stdout,
     level: 'verbose',
   },
 };
@@ -234,6 +241,7 @@ var options = {
 if (env.NODE_ENV === 'development') {
   options.devtool = 'cheap-module-source-map';
 } else {
+  delete options.chromeExtensionBoilerplate;
   options.optimization = {
     minimize: true,
     minimizer: [
@@ -243,5 +251,6 @@ if (env.NODE_ENV === 'development') {
     ],
   };
 }
+
 
 module.exports = options;

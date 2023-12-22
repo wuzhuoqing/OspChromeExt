@@ -25,7 +25,7 @@ jobs:
         OSP_BUILD_OUT: dist
       run: |
         npm install
-        npm run build
+        npx webpack
         ls -al ./
     - name: upload build
       uses: actions/upload-artifact@v4

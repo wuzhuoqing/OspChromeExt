@@ -10,7 +10,7 @@ var webpack = require('webpack'),
 
 delete config.chromeExtensionBoilerplate;
 
-config.mode = 'production';
+//config.mode = 'production';
 
 var buildFolder = path.join(__dirname, '..', 'build');
 
