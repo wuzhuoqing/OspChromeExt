@@ -22,6 +22,8 @@ config.plugins = (config.plugins || []).concat(
   })
 );
 
+console.log('before final webpack', __dirname);
 webpack(config, function (err) {
   if (err) throw err;
 });
+console.log('end of final webpack', __dirname);
