@@ -21,11 +21,14 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Build
+      env:
+        OSP_BUILD_OUT: dist
       run: |
         npm install
-        npm run build        
+        npm run build
         ls -al build/
         ls -al node_modules/
+        ls -al ./
     - name: upload build
       uses: actions/upload-artifact@v4
       with:
