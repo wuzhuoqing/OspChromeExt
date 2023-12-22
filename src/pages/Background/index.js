@@ -1,10 +1,4 @@
-import secrets from 'secrets';
-function log(...args) {
-    if (!secrets.enableLog) {
-        return;
-    }
-    console.trace(...args);
-}
+let log = console.log;
 
 log('Put the background scripts here changed.');
 

@@ -10,7 +10,7 @@ export const MP_memberDetailsUrl = 'https://www.memberplanet.com/Members/MemberD
 export const MP_APISearchUrl = 'https://api.memberplanet.com/api/Member/MemberDatabaseSearch';
 
 async function queryOSPMemberInContent() {
-  //console.log('queryOSPMemberInContent called');
+  console.log('queryOSPMemberInContent called');
 
   let errorMsg = '';
   const responseObj = await fetch('/PtaMembership/GetOSPLocalPtaMembers', {
@@ -18,7 +18,7 @@ async function queryOSPMemberInContent() {
   })
     .then(response => {
       if (!response.ok) {
-        throw new Error("Fail to query OSPMembers. Wrong website? HTTP status " + response.status);
+        throw new Error(`Fail to query OSPMembers. Wrong website? HTTP status ${response.status}  ${response.statusText}`);
       }
       return response.json();
     })
@@ -81,7 +81,7 @@ async function queryMemberPlanetMemberInContent() {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // console.log('queryMemberPlanetMemberInContent called')
+  console.log('queryMemberPlanetMemberInContent called')
 
   let ret = {
     memberList: [],
@@ -94,10 +94,11 @@ async function queryMemberPlanetMemberInContent() {
 
   let appDataString = JSON.parse(window.sessionStorage.appData);
   let appData = JSON.parse(appDataString);
-  // OspUtil.log('parse data called', window.sessionStorage.appData, appData.accessToken);
   if (!appData.accessToken) {
     return ret;
   }
+
+  console.log('queryMemberPlanetMemberInContent appData.accessToken found');
 
   let authHeader = "Bearer " + appData.accessToken;
   let pageNumIndex = 0;
@@ -128,7 +129,8 @@ async function queryMemberPlanetMemberInContent() {
     }
 
     let errorInFetch = false;
-    const responseObj = await fetch(MP_APISearchUrl, {
+    // cannot use MP_APISearchUrl here as it is passed to another page
+    const responseObj = await fetch('https://api.memberplanet.com/api/Member/MemberDatabaseSearch', {
       method: 'POST',
       body: JSON.stringify(requestObj),
       headers: {
@@ -138,7 +140,7 @@ async function queryMemberPlanetMemberInContent() {
     })
       .then(response => {
         if (!response.ok) {
-          throw new Error("Fail to query MemberPlanet. Wrong website? HTTP status " + response.status);
+          throw new Error(`Fail to query MemberPlanet. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
         }
         return response.json();
       })
@@ -166,17 +168,17 @@ async function queryMemberPlanetMemberInContent() {
       });
     }
 
-    // console.log('queryMemberPlanetMemberInContent check next call')
     // limit to max 100 K members.
     if (ret.memberList.length >= responseObj.total || pageNumIndex >= 1000) {
       break;
     }
-    // console.log('queryMemberPlanetMemberInContent getting next call')
+    console.log('queryMemberPlanetMemberInContent prepare next call. current pageNumIndex', pageNumIndex)
 
-    await sleepAsync(500);
+    await sleepAsync(50);
     pageNumIndex++;
   }
 
+  console.log('end of queryMemberPlanetMemberInContent');
   ret.statusMsg = 'Success';
   return ret;
 }
@@ -200,7 +202,7 @@ export async function loadMemberPlanetMember() {
 }
 
 async function updateOSPMemberMPIDInContent(mpidUpdateList) {
-  //console.log('queryOSPMemberInContent called');
+  console.log('queryOSPMemberInContent called');
 
   let errorMsg = '';
   const responseObj = await fetch('/PtaMembership/UpdateOSPMemberMPID', {
@@ -212,7 +214,7 @@ async function updateOSPMemberMPIDInContent(mpidUpdateList) {
   })
     .then(response => {
       if (!response.ok) {
-        throw new Error("Fail to Update OSPMember MPID, Wrong website?. HTTP status " + response.status);
+        throw new Error(`Fail to Update OSPMember MPID, Wrong website?. HTTP status ${response.status}  ${response.statusText}`);
       }
       return response.json();
     })
@@ -238,7 +240,7 @@ export async function updateOSPMemberMPID(ospMemberList) {
 
   const mpidUpdateList = [];
   for (const member of ospMemberList) {
-    if (member.MatchedMPMember && !OspUtil.strEqualIgnoreCase(member.MPIDString, `${member.MatchedMPMember.MPID}`)) {
+    if (member.MatchedMPMember && !OspUtil.strEqualIgnoreCase(`${member.MatchedMPMember.MPID}`, `${member.MPIDString}`)) {
       mpidUpdateList.push({
         MPID: member.MatchedMPMember.MPID,
         dbID: member.dbID,
@@ -311,7 +313,7 @@ class SyncHelper {
 
     await this.browserExtHelper.ajaxAction(MP_quickAddMembersUrl, async () => await this.browserExtHelper.clickElm('a#ctl00_ContentPlaceHolder_LnkSaveandaAddMore', 'MAIN'));
 
-    let recordsFound = await findMember(firstName, lastName, email || dummyEmail);
+    let recordsFound = await this.findMember(firstName, lastName, email || dummyEmail);
     if (recordsFound !== 1) {
       throw new Error(`Could not locate unique record (${recordsFound} found) for ${firstName},${lastName},${email}. ` + (recordsFound > 0 ? "Please completely remove all record for this user on MP site directly and re-upload." : ''));
     }
@@ -322,7 +324,7 @@ class SyncHelper {
     await this.setMemberType(isStudent ? 'Student' : 'Parent / Guardian', firstName, lastName);
     await this.setMemberAddress(streetAddress, city, state, zip);
     if (!email) {
-      await this.clearDummyEmail(currentTabId);
+      await this.clearDummyEmail();
     }
   }
 
@@ -385,7 +387,7 @@ class SyncHelper {
   }
 
   // must be at member details page
-  async clearDummyEmail(currentTabId) {
+  async clearDummyEmail() {
     // open info dialog
     await this.browserExtHelper.ajaxAction(MP_memberDetailsUrl, async () => await this.browserExtHelper.clickElm('a#ctl00_ContentPlaceHolder_lnkContactEdit', 'MAIN'));
 
@@ -395,7 +397,7 @@ class SyncHelper {
   }
 
   async renewMember(ospMember, mpMember) {
-    let recordsFound = await findMember(ospMember.FirstName, ospMember.LastName, ospMember.Email);
+    let recordsFound = await this.findMember(ospMember.FirstName, ospMember.LastName, ospMember.Email);
     if (recordsFound !== 1) {
       throw new Error(`Could not locate unique record (${recordsFound} found) for ${ospMember.FirstName},${ospMember.LastName},${ospMember.Email}. ` + (recordsFound > 0 ? "Please completely remove all record for this user on MP site directly and re-upload." : ''));
     }
@@ -418,11 +420,12 @@ export async function syncMember(memberToUploadList, extraWaitTimeMs, updateStat
   const currentTabId = await BrExtHelper.getCurrentTabId();
   const errorMsgs = [];
   for (const [memberIndex, member] of memberToUploadList.entries()) {
-    const memberInfo = `${member.FirstName} ${member.LastName} ${member.Email} (${memberIndex} of ${memberToUploadList.length})`;
+    const memberInfo = `${member.FirstName} ${member.LastName} ${member.Email} (${memberIndex + 1} of ${memberToUploadList.length})`;
     let actionInfo = '';
     const syncHelper = new SyncHelper(currentTabId, parseInt(extraWaitTimeMs));
     try {
-      OspUtil.asyncCallWithTimeout(async () => {
+      OspUtil.log(`process ${memberInfo}`, member)
+      await OspUtil.asyncCallWithTimeout(async () => {
         if (member.Status === MemberHelper.MPSyncStatus.NeedToAdd) {
           actionInfo = 'add new member';
           updateStatusFunc(`begin to ${actionInfo} ${memberInfo}`);
@@ -436,6 +439,7 @@ export async function syncMember(memberToUploadList, extraWaitTimeMs, updateStat
       }, 60000);
     }
     catch (err) {
+      OspUtil.error(`Failed to ${actionInfo} ${memberInfo}`, err);
       syncHelper.abandonRemainingRequests();
       const errInfo = `Failed to ${actionInfo} ${memberInfo} ${err}`;
       updateErrorFunc(`Last error: ${errInfo}`);

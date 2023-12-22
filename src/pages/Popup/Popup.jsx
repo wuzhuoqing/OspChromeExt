@@ -35,6 +35,19 @@ const Button = styled.button`
   border-radius: 5px;
 `;
 
+const LoadGridButton = styled.button`
+  background-color: #299dbd;
+  border: none;
+  color: white;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  border-radius: 5px;
+`;
+
 const Popup = () => {
   const gridStyle = useMemo(() => ({ height: '400px', width: '100%' }), []);
   // const gridStatusBar = useMemo(() => {
@@ -74,11 +87,11 @@ const Popup = () => {
 
   const [waitEleDelay, setWaitEleDelay] = useState(0);
 
-  const [ospInfoWarning1, setOspInfoWarning1] = useState('Warning 1!');
-  const [ospInfoWarning2, setOspInfoWarning2] = useState('Warning 2!');
+  const [ospInfoWarning1, setOspInfoWarning1] = useState('');
+  const [ospInfoWarning2, setOspInfoWarning2] = useState('');
 
-  const [ospInfoText1, setOspInfoText1] = useState('This is my first text!');
-  const [ospInfoText2, setOspInfoText2] = useState('This is my second text!');
+  const [ospInfoText1, setOspInfoText1] = useState('');
+  const [ospInfoText2, setOspInfoText2] = useState('');
   const [rowDataMp, setRowDataMp] = useState([]);
   const [columnDefsMp, setColumnDefsMp] = useState([
     { field: 'MPID', headerCheckboxSelection: true, checkboxSelection: true },
@@ -101,13 +114,19 @@ const Popup = () => {
       MemberHelper.cleanAndMatchOspMpMembers(message.ospMemberList, message.mpMemberList);
       // don't show inactive MP members which is not going to be renewed. Can have a lot.
       message.mpMemberList = message.mpMemberList.filter(m => m.IsActive || m.Status !== MemberHelper.MPSyncStatus.Extra);
-
+      const ospMemberToUpload = MemberHelper.getOspMemberToUpload(message.ospMemberList);
       const ospWarningMsg = MemberHelper.getExtraMemberWarningMsg(message.ospMemberList);
       const mpWarningMsg = MemberHelper.getExtraMemberWarningMsg(message.mpMemberList);
-      setOspInfoWarning1(ospWarningMsg ? 'Find duplicate members in OSP, please sort by Status column to check and take actions directly on MemberPlanet if needed:' : '')
-      setOspInfoText1(ospWarningMsg)
-      setOspInfoWarning2(mpWarningMsg ? 'Find duplicate/extra members in MemberPlanet, please sort by Status column to check and take actions directly on MemberPlanet if needed:' : '');
-      setOspInfoText2(mpWarningMsg)
+
+      setOspInfoText1(`${ospMemberToUpload.length} OSP member to be uploaded`)
+
+      if (ospWarningMsg || mpWarningMsg) {
+        const ospInfo = 'Find duplicate members in OSP, please sort by Status column to check and take actions directly on  if needed.';
+        const mpInfo = 'Find duplicate/extra members in MemberPlanet, please sort by Status column to check and take actions directly on MemberPlanet if needed.';
+        setOspInfoWarning2(`${ospWarningMsg ? ospInfo : ''} ${mpWarningMsg ? mpInfo : ''}`);
+        setOspInfoText2(`${ospWarningMsg ? 'OSP Details:' : ''} ${ospWarningMsg} ${mpWarningMsg ? 'MP Details:' : ''} ${mpWarningMsg}`);
+      }
+
       setRowDataMp(message.mpMemberList);
       setRowDataOsp(message.ospMemberList);
     }
@@ -127,19 +146,20 @@ const Popup = () => {
   const loadOSPMember = OspUtil.oneInstanceRunWrapper(async () => {
     setOspInfoText1('loading OSPMember...');
     const statusMsg = await OspHelper.loadOSPMember();
-    setOspInfoText1(statusMsg);
+    setOspInfoText1(`load OSPMember End. ${statusMsg}`);
   });
 
   const loadMemberPlanetMember = OspUtil.oneInstanceRunWrapper(async () => {
     let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
-    if (!OspHelper.MP_AppBaseUrl.startsWith(currentTabUrl.toLowerCase())) {
+    if (!currentTabUrl.toLowerCase().startsWith(OspHelper.MP_AppBaseUrl)) {
       setOspInfoWarning1(`not on ${OspHelper.MP_AppBaseUrl}`);
+      setOspInfoText1(`tabUrl is "${currentTabUrl}"`);
       return;
     }
 
     setOspInfoText1('loading MemberPlanet Member...');
     const statusMsg = await OspHelper.loadMemberPlanetMember();
-    setOspInfoText1(statusMsg);
+    setOspInfoText1(`load MemberPlanet Member End. ${statusMsg}`);
   });
 
   const updateOSPMemberMPID = OspUtil.oneInstanceRunWrapper(async () => {
@@ -152,25 +172,26 @@ const Popup = () => {
   const syncMember = OspUtil.oneInstanceRunWrapper(async () => {
     OspUtil.log('syncMember called');
     let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
-    if (!OspHelper.MP_BaseUrl.startsWith(currentTabUrl.toLowerCase())) {
+    if (!currentTabUrl.toLowerCase().startsWith(OspHelper.MP_BaseUrl)) {
       setOspInfoWarning1(`not on ${OspHelper.MP_BaseUrl}`);
+      setOspInfoText1(`tabUrl is "${currentTabUrl}"`);
       return;
     }
 
-    //setOspInfoWarning1('');
+    setOspInfoWarning1('');
     setOspInfoWarning2('');
     setOspInfoText1('');
     setOspInfoText2('');
     const selectedRowData = ospGridRef.current.api.getSelectedRows();
-    const ospMemberToUpload = selectedRowData.filter(m => m.Status === MemberHelper.MPSyncStatus.NeedToAdd || m.Status === MemberHelper.MPSyncStatus.NeedToRenew);
+    const ospMemberToUpload = MemberHelper.getOspMemberToUpload(selectedRowData);
     OspUtil.log('ospMemberToUpload', ospMemberToUpload);
 
     let gridContainer = document.querySelector('div.mplist-container');
     gridContainer.style.display = 'none';
 
-    let processMsg = await OspHelper.syncMember(selectedRowData, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
+    let processMsg = await OspHelper.syncMember(ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
     setOspInfoWarning2(processMsg);
-    setOspInfoWarning1('Please reload the memberplanet list to refresh status');
+    setOspInfoWarning1(`MP member status may be changed now. Please go to memberplanet member page and reload member list to refresh status`);
     gridContainer.style.display = 'block';
   });
 
@@ -195,7 +216,7 @@ const Popup = () => {
       <div className="mplist-container">
         <div>
           <div>
-            <Button onClick={loadOSPMember}>Load OSP Members</Button>
+            <LoadGridButton onClick={loadOSPMember}>Load OSP Members</LoadGridButton>
           </div>
           <div style={gridStyle}
             className={
@@ -218,7 +239,7 @@ const Popup = () => {
         </div>
         <div>
           <div>
-            <Button onClick={loadMemberPlanetMember}>Load MP Members</Button>
+            <LoadGridButton onClick={loadMemberPlanetMember}>Load MP Members</LoadGridButton>
           </div>
           <div style={gridStyle}
             className={

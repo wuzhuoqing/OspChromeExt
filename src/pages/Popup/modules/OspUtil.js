@@ -12,6 +12,7 @@ function dummyLog() {
 }
 
 export let log = console.log;
+export let error = console.error;
 
 export function enableLog() {
   log = console.log;
@@ -24,11 +25,11 @@ export function disableLog() {
 // copied from https://javascript.plainenglish.io/how-to-add-a-timeout-limit-to-asynchronous-javascript-functions-3676d89c186d
 /**
  * Call an async function with a maximum time limit (in milliseconds) for the timeout
- * @param {Promise<any>} asyncPromise An asynchronous promise to resolve
+ * @param {Promise<any>} asyncFunc An asynchronous function
  * @param {number} timeLimitInMs Time limit to attempt function in milliseconds
  * @returns {Promise<any> | undefined} Resolved promise for async function call, or an error if time limit reached
  */
-export async function asyncCallWithTimeout(asyncPromise, timeLimitInMs) {
+export function asyncCallWithTimeout(asyncFunc, timeLimitInMs) {
   let timeoutHandle;
 
   const timeoutPromise = new Promise((_resolve, reject) => {
@@ -38,7 +39,7 @@ export async function asyncCallWithTimeout(asyncPromise, timeLimitInMs) {
     );
   });
 
-  return Promise.race([asyncPromise, timeoutPromise]).then(result => {
+  return Promise.race([asyncFunc(), timeoutPromise]).then(result => {
     clearTimeout(timeoutHandle);
     return result;
   })

@@ -259,6 +259,10 @@ export function cleanAndMatchOspMpMembers(ospMemberList, meMemberList) {
   MatchUpLocalAndRemoteListsBasedOnNameAddress(ospMemberList, meMemberList);
 }
 
+export function getOspMemberToUpload(memberList) {
+  return memberList.filter(m => m.Status === MPSyncStatus.NeedToAdd || m.Status === MPSyncStatus.NeedToRenew)
+}
+
 export function getExtraMemberWarningMsg(memberList) {
   const sbInfoList = [];
   for (const member of memberList) {

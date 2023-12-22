@@ -167,8 +167,8 @@ export default class BrExtHelper {
   async waitForElm(selector) {
     await this.executeFuncInContent(waitForElmInContent, [selector])
 
-    if (extraWaitTimeMs > 0) {
-      await OspUtil.sleep(extraWaitTimeMs);
+    if (this.extraWaitTimeMs > 0) {
+      await OspUtil.sleep(this.extraWaitTimeMs);
     }
   }
 
