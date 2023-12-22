@@ -1,5 +1,3 @@
-import secrets from 'secrets';
-
 export function strEqualIgnoreCase(str1, str2) {
   return str1.localeCompare(str2, 'en', { sensitivity: 'base' }) === 0;
 }
