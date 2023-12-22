@@ -22,6 +22,15 @@ config.plugins = (config.plugins || []).concat(
   })
 );
 
+var buildFolder = path.join(__dirname, '..', 'build');
+
+console.log('checking folder', buildFolder);
+
+if (!fs.existsSync(buildFolder)) {
+  console.log('creating folder', buildFolder);
+  fs.mkdirSync(buildFolder)
+}
+
 console.log('before final webpack', __dirname);
 
 try {
