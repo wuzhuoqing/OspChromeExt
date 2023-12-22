@@ -26,11 +26,9 @@ jobs:
       run: |
         npm install
         npm run build
-        ls -al build/
-        ls -al node_modules/
         ls -al ./
     - name: upload build
       uses: actions/upload-artifact@v4
       with:
         name: osp-chrome-ext
-        path: ./build/**/*
+        path: ./dist/**/*
