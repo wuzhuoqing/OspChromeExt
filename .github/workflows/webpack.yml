@@ -24,11 +24,12 @@ jobs:
       run: |
         npm install
         npm run build        
-        ls -al $PWD
+        ls -al build/
+        ls -al .
         ls -al ../
         ls -al ../../
         ls -al ../../../
-    - name: Upload build output
+    - name: upload build
       uses: actions/upload-artifact@v4
       with:
         name: osp-chrome-ext
