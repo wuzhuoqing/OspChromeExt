@@ -134,7 +134,7 @@ function MarkDuplicates(membersWithSameNames) {
       const dups = membersWithSameNames.filter(potentialDup => potentialDup.ComplexHashKey == complexHashKey);
 
       if (dups.length > 1) {
-        for (const dup in dups) {
+        for (const dup of dups) {
           dup.Status = MPSyncStatus.Duplicate;
         }
       }
