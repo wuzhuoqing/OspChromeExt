@@ -2,6 +2,10 @@ import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
 import "ag-grid-community/styles/ag-grid.css"; // Core CSS
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
 
+import { Importer, ImporterField } from 'react-csv-importer';
+// include the widget CSS file whichever way your bundler supports it
+import 'react-csv-importer/dist/index.css';
+
 import React, {
   useEffect,
   useCallback,
@@ -67,6 +71,7 @@ const Popup = () => {
   };
 
   const ospGridRef = useRef();
+  const [rowDataOspCsv, setRowDataOspCSv] = useState([]);
   const [rowDataOsp, setRowDataOsp] = useState([]);
   const [columnDefsOsp, setColumnDefsOsp] = useState([
     { field: 'ID', headerCheckboxSelection: true, checkboxSelection: true },
@@ -130,6 +135,13 @@ const Popup = () => {
       setRowDataMp(message.mpMemberList);
       setRowDataOsp(message.ospMemberList);
     }
+  }
+
+  function saveOspCSV() {
+    OspUtil.log('rowDataOspCsv', rowDataOspCsv);
+    chrome.runtime.sendMessage({
+      OSPMemberList: rowDataOspCsv
+    });
   }
 
   function initRunFunc() {
@@ -217,6 +229,31 @@ const Popup = () => {
         <div>
           <div>
             <LoadGridButton onClick={loadOSPMember}>Load OSP Members</LoadGridButton>
+            <input type='checkbox' value={false} onChange={e => document.querySelector('div#OspCsvImport').style.display = document.querySelector('div#OspCsvImport').style.display === 'block' ? 'none' : 'block'} />UseCsv
+            <div id='OspCsvImport' style={{ display: "none" }}>
+              <Importer
+                dataHandler={async (rows, { startIndex }) => {
+                  OspUtil.log('OspCsvImport', rows, startIndex);
+                  const rowsWithId = [];
+                  for (const [index, row] of rows.entries()) {
+                    rowsWithId.push({ ...row, ID: startIndex + index + 1 })
+                  }
+                  setRowDataOspCSv(oldArray => [...oldArray, ...rowsWithId])
+                }}
+                onClose={saveOspCSV}
+              >
+                <ImporterField name="Email" label="Email" />
+                <ImporterField name="FirstName" label="FirstName" />
+                <ImporterField name="LastName" label="LastName" />
+                <ImporterField name="IsStudent" label="IsStudent" />
+                <ImporterField name="MPIDString" label="MPID" optional />
+                <ImporterField name="ID" label="ID" optional />
+                <ImporterField name="Address" label="Address" optional />
+                <ImporterField name="City" label="City" optional />
+                <ImporterField name="ZipCode" label="ZipCode" optional />
+                <ImporterField name="State" label="State" optional />
+              </Importer>
+            </div>
           </div>
           <div style={gridStyle}
             className={
