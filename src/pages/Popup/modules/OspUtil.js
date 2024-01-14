@@ -20,6 +20,21 @@ export function disableLog() {
   log = dummyLog;
 }
 
+export function getCurrentLocalDateStr() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  return formattedTime;
+}
+export function isNullOrWhiteSpace(input) {
+  return !input || !input.trim();
+}
+
 // copied from https://javascript.plainenglish.io/how-to-add-a-timeout-limit-to-asynchronous-javascript-functions-3676d89c186d
 /**
  * Call an async function with a maximum time limit (in milliseconds) for the timeout

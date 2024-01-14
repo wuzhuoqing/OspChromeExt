@@ -29,6 +29,10 @@
   color: white;
 }
 
+div.ospinfo-container {
+  white-space: pre-line;
+}
+
 div.ospinfo-container>h5 {
   color: red;
 }

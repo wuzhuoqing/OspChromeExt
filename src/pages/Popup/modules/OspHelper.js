@@ -75,6 +75,98 @@ export async function loadOSPMember() {
   return statusMsg;
 }
 
+async function getTeacherClassroomInfoListInContent() {
+  console.log('getTeacherClassroomInfoListInContent called');
+
+  let errorMsg = '';
+  const responseObj = await fetch('/PtaMembership/GetTeacherClassroomInfoList', {
+    method: 'POST',
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Fail to GetTeacherClassroomInfoList. Wrong website? HTTP status ${response.status}  ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .catch(error => {
+      console.error(error);
+      errorMsg = `${error}`;
+    });
+
+  let ret = {
+    teacherClassRoomInfoList: [],
+    statusMsg: `Fail to load OSP Member ${errorMsg}`
+  };
+
+  if (!responseObj || (!responseObj.length && responseObj.length !== 0)) {
+    return ret;
+  }
+
+  for (const member of responseObj) {
+    ret.teacherClassRoomInfoList.push(member);
+  }
+
+  ret.statusMsg = 'Success';
+  return ret;
+}
+
+export async function getTeacherClassroomInfoList() {
+  OspUtil.log("getTeacherClassroomInfoList called");
+
+  const currentTabId = await BrExtHelper.getCurrentTabId();
+  const browserExtHelper = new BrExtHelper(currentTabId);
+  const result = await browserExtHelper.executeFuncInContent(getTeacherClassroomInfoListInContent);
+  return result;
+}
+
+async function AddStudentAndTwoParentsInContent(ospFamilyInfoList) {
+  console.log('AddStudentAndTwoParentsInContent called');
+
+  const ret = {
+    responseList: [],
+    statusMsg: `Fail to AddStudentAndTwoParentsInContent`
+  };
+
+  for (const ospFamilyInfo of ospFamilyInfoList) {
+    let errorMsg = '';
+    const responseObj = await fetch('/DataImport/AddStudentAndTwoParents', {
+      method: 'POST',
+      body: JSON.stringify(ospFamilyInfo),
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Fail to AddStudentAndTwoParents, Wrong website?. HTTP status ${response.status}  ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .catch(error => {
+        console.error(error)
+        errorMsg = `${error}`;
+        ret.responseList.push(errorMsg);
+      });
+
+    if (!responseObj || (!responseObj.length && responseObj.length !== 0)) {
+      return ret;
+    }
+    ret.responseList.push(responseObj.join(' '));
+  }
+
+  ret.statusMsg = `Success`;
+  return ret;
+}
+
+export async function AddStudentAndTwoParents(ospFamilyInfoList) {
+  OspUtil.log("AddStudentAndTwoParents called");
+
+  const currentTabId = await BrExtHelper.getCurrentTabId();
+  const browserExtHelper = new BrExtHelper(currentTabId);
+  const result = await browserExtHelper.executeFuncInContent(AddStudentAndTwoParentsInContent, [ospFamilyInfoList]);
+  return result;
+}
+
 async function queryMemberPlanetMemberInContent() {
 
   function sleepAsync(ms) {
@@ -223,7 +315,7 @@ async function updateOSPMemberMPIDInContent(mpidUpdateList) {
       errorMsg = `${error}`;
     });
 
-  let ret = {
+  const ret = {
     statusMsg: `Fail to update OSPMember MPID ${errorMsg}`
   };
 
@@ -259,6 +351,73 @@ export async function updateOSPMemberMPID(ospMemberList) {
   return statusMsg;
 }
 
+export function patchOspUserRecord(ospFamilyInfoList, classroomFinder, allowNoParentStudent, allowEmptyValueOverwrite) {
+  OspUtil.log("patchOspUserRecord called");
+  const adminNoteLabel = `data import ${OspUtil.getCurrentLocalDateStr()}`;
+  const retMsg = [];
+  for (const ospFamilyInfo of ospFamilyInfoList) {
+    let teacherFind = false;
+    if (ospFamilyInfo.TeacherFirstName || ospFamilyInfo.TeacherLastName || ospFamilyInfo.TeacherEmailAddress) {
+      const classRoomInfo = classroomFinder.GetClassroomId(ospFamilyInfo.TeacherFirstName, ospFamilyInfo.TeacherLastName, ospFamilyInfo.TeacherEmailAddress);
+      if (classRoomInfo) {
+        teacherFind = true;
+        ospFamilyInfo.TeacherFirstName = classRoomInfo.TeacherFirstName;
+        ospFamilyInfo.TeacherLastName = classRoomInfo.TeacherLastName;
+        ospFamilyInfo.TeacherEmailAddress = classRoomInfo.TeacherEmailAddress;
+      } else {
+        retMsg.push(`Row ${ospFamilyInfo.ID} Teacher with Email ${ospFamilyInfo.TeacherEmailAddress} FirstName ${ospFamilyInfo.TeacherFirstName} LastName ${ospFamilyInfo.TeacherLastName} Not Found `)
+      }
+    }
+
+    if (!teacherFind) {
+      ospFamilyInfo.TeacherFirstName = '';
+      ospFamilyInfo.TeacherLastName = '';
+      ospFamilyInfo.TeacherEmailAddress = '';
+    }
+
+    ospFamilyInfo.AllowNoParentStudent = allowNoParentStudent ? 'true' : '';
+    ospFamilyInfo.AllowEmptyValueOverwrite = allowEmptyValueOverwrite ? 'true' : '';
+    ospFamilyInfo.AdminNoteLabel = adminNoteLabel;
+  }
+
+  return retMsg;
+}
+
+export async function uploadOSPUser(ospFamilyInfoList, allowNoParentStudent, allowEmptyValueOverwrite) {
+  OspUtil.log("uploadOSPUser called");
+  const ret = {
+    retMsg: [],
+    statusMsg: `Fail to getTeacherClassroomInfoList`
+  };
+
+  const teacherClassroomInfoListResponse = await getTeacherClassroomInfoList();
+  if (teacherClassroomInfoListResponse.statusMsg !== 'Success') {
+    ret.retMsg.push(teacherClassroomInfoListResponse.statusMsg);
+    return ret;
+  }
+  const teacherClassroomInfoList = teacherClassroomInfoListResponse.teacherClassRoomInfoList;
+  const classroomFinder = new ClassroomFinder(teacherClassroomInfoList);
+  const patchMsgList = patchOspUserRecord(ospFamilyInfoList, classroomFinder, allowNoParentStudent, allowEmptyValueOverwrite)
+  for (const patchMsg of patchMsgList) {
+    ret.retMsg.push(patchMsg);
+  }
+
+  const addResponse = await AddStudentAndTwoParents(ospFamilyInfoList);
+  if (addResponse.statusMsg !== 'Success') {
+    ret.retMsg.push(addResponse.statusMsg);
+  }
+
+  for (const responseMsg of addResponse.responseList) {
+    ret.retMsg.push(responseMsg);
+  }
+
+  if (addResponse.statusMsg !== 'Success') {
+    return ret;
+  }
+
+  ret.statusMsg = 'Success';
+  return ret;
+}
 
 class SyncHelper {
 
@@ -448,4 +607,83 @@ export async function syncMember(memberToUploadList, extraWaitTimeMs, updateStat
   }
   updateStatusFunc('end of sync members');
   return errorMsgs.join(', ');
+}
+
+class ClassroomFinder {
+
+  constructor(teacherClassInfoList) {
+    // Dictionary<string, TeacherClassRoomInfo>()
+    this._emailName2Classroom = {};
+    this._email2Classroom = {};
+    this._name2Classroom = {};
+    this._FirstNameInit2Classroom = {};
+
+    for (const info of teacherClassInfoList) {
+      if (!OspUtil.isNullOrWhiteSpace(info.TeacherEmailAddress)) {
+        this._email2Classroom[this.GetDictKey(info.TeacherEmailAddress)] = info;
+        this._emailName2Classroom[this.GetDictKey(info.TeacherFirstName, info.TeacherLastName, info.TeacherEmailAddress)] = info;
+      }
+
+      if (!OspUtil.isNullOrWhiteSpace(info.TeacherLastName)) {
+        this._FirstNameInit2Classroom[this.GetDictKey(this.GetFirstNameInitial(info.TeacherFirstName), info.TeacherLastName)] = info;
+        this._name2Classroom[this.GetDictKey(info.TeacherFirstName, info.TeacherLastName)] = info;
+      }
+    }
+  }
+
+  GetClassroomId(firstName, lastName, email) {
+    const emailNameKey = this.GetDictKey(firstName, lastName, email);
+    if (this._emailName2Classroom[emailNameKey]) {
+      return this._emailName2Classroom[emailNameKey];
+    }
+
+    const emailKey = this.GetDictKey(email);
+    if (this._email2Classroom[emailKey]) {
+      return this._email2Classroom[emailKey];
+    }
+
+    const nameKey = this.GetDictKey(firstName, lastName);
+    if (this._name2Classroom[nameKey]) {
+      return this._name2Classroom[nameKey];
+    }
+
+    if (!firstName) {
+      let firstNameInitial = firstName;
+      if (firstName.length == 2 && firstName[1] == '.') {
+        firstNameInitial = this.GetFirstNameInitial(firstName);
+      }
+      const fisrtNameInitialKey = this.GetDictKey(firstNameInitial, lastName);
+      if (this._FirstNameInit2Classroom[fisrtNameInitialKey]) {
+        return this._FirstNameInit2Classroom[fisrtNameInitialKey];
+      }
+    }
+    return null;
+  }
+
+  GetFirstNameInitial(firstName) {
+    if (OspUtil.isNullOrWhiteSpace(firstName)) {
+      return '';
+    }
+    return firstName.Substring(0, 1);
+  }
+
+  CleanString(input) {
+    if (OspUtil.isNullOrWhiteSpace(input)) {
+      return '';
+    }
+
+    return input.trim().toLowerCase().replace(/\t/g, ' ');
+  }
+
+  GetDictKey(email) {
+    return `${this.CleanString(email)}`;
+  }
+
+  GetDictKey(firstName, lastName) {
+    return `${this.CleanString(firstName)}\t${this.CleanString(lastName)}`;
+  }
+
+  GetDictKey(firstName, lastName, email) {
+    return `${this.CleanString(firstName)}\t${this.CleanString(lastName)}\t${this.CleanString(email)}`;
+  }
 }

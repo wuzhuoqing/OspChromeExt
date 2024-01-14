@@ -176,7 +176,10 @@ const Popup = () => {
 
   const updateOSPMemberMPID = OspUtil.oneInstanceRunWrapper(async () => {
     setOspInfoText1('updating OSPMember MPIDs...');
-    const selectedRowData = ospGridRef.current.api.getSelectedRows();
+    let selectedRowData = ospGridRef.current.api.getSelectedRows();
+    if (selectedRowData.length === 0) {
+      selectedRowData = rowDataOsp;
+    }
     const statusMsg = await OspHelper.updateOSPMemberMPID(selectedRowData);
     setOspInfoText1(statusMsg);
   });
