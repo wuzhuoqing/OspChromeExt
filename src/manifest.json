@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "OurschoolPages Chrome Extension",
   "description": "OurschoolPages Chrome Extension to help upload data to MemberPlanet",
-  "version": "1.1",
+  "version": "1.2",
   "background": {
     "service_worker": "background.bundle.js"
   },
