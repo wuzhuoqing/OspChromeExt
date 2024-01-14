@@ -79,7 +79,7 @@ async function getTeacherClassroomInfoListInContent() {
   console.log('getTeacherClassroomInfoListInContent called');
 
   let errorMsg = '';
-  const responseObj = await fetch('/PtaMembership/GetTeacherClassroomInfoList', {
+  const responseObj = await fetch('/DataImport/GetTeacherClassroomInfoList', {
     method: 'POST',
   })
     .then(response => {
@@ -364,6 +364,7 @@ export function patchOspUserRecord(ospFamilyInfoList, classroomFinder, allowNoPa
         ospFamilyInfo.TeacherFirstName = classRoomInfo.TeacherFirstName;
         ospFamilyInfo.TeacherLastName = classRoomInfo.TeacherLastName;
         ospFamilyInfo.TeacherEmailAddress = classRoomInfo.TeacherEmailAddress;
+        ospFamilyInfo.ClassroomID = `${classRoomInfo.ClassroomID}`
       } else {
         retMsg.push(`Row ${ospFamilyInfo.ID} Teacher with Email ${ospFamilyInfo.TeacherEmailAddress} FirstName ${ospFamilyInfo.TeacherFirstName} LastName ${ospFamilyInfo.TeacherLastName} Not Found `)
       }
@@ -373,6 +374,7 @@ export function patchOspUserRecord(ospFamilyInfoList, classroomFinder, allowNoPa
       ospFamilyInfo.TeacherFirstName = '';
       ospFamilyInfo.TeacherLastName = '';
       ospFamilyInfo.TeacherEmailAddress = '';
+      ospFamilyInfo.ClassroomID = '';
     }
 
     ospFamilyInfo.AllowNoParentStudent = allowNoParentStudent ? 'true' : '';
@@ -664,7 +666,7 @@ class ClassroomFinder {
     if (OspUtil.isNullOrWhiteSpace(firstName)) {
       return '';
     }
-    return firstName.Substring(0, 1);
+    return firstName.substring(0, 1);
   }
 
   CleanString(input) {
