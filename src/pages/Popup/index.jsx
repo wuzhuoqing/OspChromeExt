@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-tabs/style/react-tabs.css';
 
-import Popup from './Popup';
+import MPSync from './MPSync';
 import StudentImport from './StudentImport';
 import './index.css';
 
@@ -21,7 +21,7 @@ root.render(
             </TabList>
 
             <TabPanel>
-                <Popup />
+                <MPSync />
             </TabPanel>
             <TabPanel>
                 <StudentImport />
