@@ -23,14 +23,39 @@ async function waitForElmInContent(selector) {
 }
 
 async function clickElmInContent(selector) {
+  // console.log('clicking', selector);
   let ele = document.querySelector(selector);
   ele.click();
+  // console.log('clicked', selector);
   return selector;
 }
 
 async function setElmTextInContent(selector, strText) {
-  let ele = document.querySelector(selector);
-  ele.value = strText;
+  let element = document.querySelector(selector);
+  //console.log('setting', selector, element, strText);
+  // https://stackoverflow.com/questions/66536154/changing-input-text-of-a-react-app-using-javascript
+  const { set: valueSetter } = Object.getOwnPropertyDescriptor(element, 'value') || {};
+  const prototype = Object.getPrototypeOf(element);
+  const { set: prototypeValueSetter } = Object.getOwnPropertyDescriptor(prototype, 'value') || {};
+  //console.log('prepared', 'valueSetter', valueSetter, 'prototypeValueSetter', prototypeValueSetter);
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    //console.log('setting value prototypeValueSetter', selector, element, element.value);
+    prototypeValueSetter.call(element, strText)
+  } else if (valueSetter) {
+    //console.log('setting value valueSetter', selector, element, element.value);
+    valueSetter.call(element, strText)
+  } else {
+    //console.log('setting value natively', selector, element, element.value);
+    element.value = strText;
+  }
+
+  //
+  //element.setAttribute("value", strText);
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  // console.log('setted', selector, element, strText);
+  //console.log('setted value', selector, element, element.value);
   return selector;
 }
 
@@ -38,6 +63,41 @@ async function selectOptionIndexInContent(selector, index) {
   let ele = document.querySelector(selector);
   ele.selectedIndex = index;
   ele.dispatchEvent(new Event('change', { bubbles: true }));
+  return selector;
+}
+
+async function setCheckboxStateInContent(selector, cbState) {
+  let element = document.querySelector(selector);
+  //console.log('setting', selector, element, cbState);
+  // https://stackoverflow.com/questions/66536154/changing-input-text-of-a-react-app-using-javascript
+  const { set: valueSetter } = Object.getOwnPropertyDescriptor(element, 'checked') || {};
+  const prototype = Object.getPrototypeOf(element);
+  const { set: prototypeValueSetter } = Object.getOwnPropertyDescriptor(prototype, 'checked') || {};
+  //console.log('prepared', 'valueSetter', valueSetter, 'prototypeValueSetter', prototypeValueSetter);
+
+  const lastValue = element.checked;
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    //console.log('setting checked prototypeValueSetter', selector, element, element.checked);
+    prototypeValueSetter.call(element, cbState)
+  } else if (valueSetter) {
+    //console.log('setting checked valueSetter', selector, element, element.checked);
+    valueSetter.call(element, cbState)
+  } else {
+    element.checked = cbState;
+    //console.log('setting checked natively', selector, element, element.checked);
+  }
+
+  // hack from https://github.com/facebook/react/issues/11488
+  // if (element._valueTracker) {
+  //   element._valueTracker.setValue(lastValue);
+  // }
+
+  //element.setAttribute("checked", cbState);
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('click', { bubbles: true }));
+  //console.log('setted checked', selector, element, element.checked);
   return selector;
 }
 
@@ -177,9 +237,14 @@ export default class BrExtHelper {
     await this.executeFuncInContent(clickElmInContent, [selector], world);
   }
 
-  async setElmText(selector, strText) {
+  async setCheckboxState(selector, cbState, world = 'ISOLATED') {
     await this.waitForElm(selector);
-    await this.executeFuncInContent(setElmTextInContent, [selector, strText]);
+    await this.executeFuncInContent(setCheckboxStateInContent, [selector, cbState], world);
+  }
+
+  async setElmText(selector, strText, world = 'ISOLATED') {
+    await this.waitForElm(selector);
+    await this.executeFuncInContent(setElmTextInContent, [selector, strText], world);
   }
 
   async selectOptionIndex(selector, index) {

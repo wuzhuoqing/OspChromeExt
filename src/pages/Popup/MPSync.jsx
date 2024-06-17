@@ -2,6 +2,8 @@ import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
 import "ag-grid-community/styles/ag-grid.css"; // Core CSS
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
 
+import { useCSVDownloader } from 'react-papaparse';
+
 import { Importer, ImporterField } from 'react-csv-importer';
 // include the widget CSS file whichever way your bundler supports it
 import 'react-csv-importer/dist/index.css';
@@ -69,6 +71,8 @@ const Popup = () => {
   const autoSizeStrategy = {
     type: 'fitCellContents'
   };
+
+  const { CSVDownloader } = useCSVDownloader();
 
   const ospGridRef = useRef();
   const [rowDataOspCsv, setRowDataOspCSv] = useState([]);
@@ -156,7 +160,7 @@ const Popup = () => {
     OspUtil.log('rowDataOspCsv', rowDataOspCsv);
     const rowsPatched = [];
     for (const [index, row] of rowDataOspCsv.entries()) {
-      rowsPatched.push({ ...row, IsStudent: OspUtil.strEqualIgnoreCase(row.MemberType, 'Student') })
+      rowsPatched.push({ ...row, IsStudent: OspUtil.strEqualIgnoreCase('Student', row.MemberType) })
     }
 
     document.getElementById('OspCsvImportCheckbox').checked = false;
@@ -242,6 +246,86 @@ const Popup = () => {
     setOspInfoText1(statusMsg);
   });
 
+  function getGiveBacksMemberUploadCsv() {
+    OspUtil.log('getGiveBacksMemberUploadCsv called');
+    let selectedRowData = ospGridRef.current.api.getSelectedRows();
+    if (selectedRowData.length === 0) {
+      selectedRowData = rowDataOsp;
+    }
+    const ospMemberToUpload = MemberHelper.getOspMemberToUpload(selectedRowData);
+    OspUtil.log('ospMemberToCsv', ospMemberToUpload);
+    const gbCsvObjs = [];
+    const gbSchoolYear = OspUtil.getCurrentGiveBacksShoolYear();
+    for (const member of ospMemberToUpload) {
+      gbCsvObjs.push({
+        "First Name": member.FirstName,
+        "Last Name": member.LastName,
+        "Email": member.Email,
+        "Phone Number": '',
+        "Member Type": member.IsStudent ? 'Student' : 'Parent/Guardian',
+        "School Year Ending": gbSchoolYear
+      })
+    }
+    return gbCsvObjs;
+  }
+
+  const syncGiveBacksMember = OspUtil.oneInstanceRunWrapper(async () => {
+    OspUtil.log('syncGiveBacksMember called');
+    let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
+    const currentTabHost = OspUtil.getHost(currentTabUrl);
+    if (!currentTabHost.toLowerCase().endsWith(OspHelper.GB_HostSuffix)) {
+      setOspInfoWarning1(`not on ${OspHelper.GB_HostSuffix}`);
+      setOspInfoText1(`tabUrl is "${currentTabUrl}"`);
+      return;
+    }
+
+    setOspInfoWarning1('');
+    setOspInfoWarning2('');
+    setOspInfoText1('');
+    setOspInfoText2('');
+    let selectedRowData = ospGridRef.current.api.getSelectedRows();
+    if (selectedRowData.length === 0) {
+      selectedRowData = rowDataOsp;
+    }
+    const ospMemberToUpload = MemberHelper.getOspMemberToUpload(selectedRowData);
+    OspUtil.log('ospMemberToSync', ospMemberToUpload);
+
+    let gridContainer = document.querySelector('div.mplist-container');
+    gridContainer.style.display = 'none';
+
+    let processMsg = await OspHelper.syncGiveBacksMember(currentTabHost, ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
+    setOspInfoWarning2(processMsg);
+    setOspInfoWarning1(`GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
+    gridContainer.style.display = 'block';
+  });
+
+  const voidGiveBacksMember = OspUtil.oneInstanceRunWrapper(async () => {
+    OspUtil.log('voidGiveBacksMember called');
+    let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
+    const currentTabHost = OspUtil.getHost(currentTabUrl);
+    if (!currentTabHost.toLowerCase().endsWith(OspHelper.GB_HostSuffix)) {
+      setOspInfoWarning1(`not on ${OspHelper.GB_HostSuffix}`);
+      setOspInfoText1(`tabUrl is "${currentTabUrl}"`);
+      return;
+    }
+
+    setOspInfoWarning1('');
+    setOspInfoWarning2('');
+    setOspInfoText1('');
+    setOspInfoText2('');
+    const selectedRowData = ospGridRef.current.api.getSelectedRows();
+    const ospMemberToUpload = MemberHelper.getOspMemberToUpload(selectedRowData);
+    OspUtil.log('ospMemberToUpload', ospMemberToUpload);
+
+    let gridContainer = document.querySelector('div.mplist-container');
+    gridContainer.style.display = 'none';
+
+    let processMsg = await OspHelper.syncGiveBacksMember(currentTabHost, ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
+    setOspInfoWarning2(processMsg);
+    setOspInfoWarning1(`GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
+    gridContainer.style.display = 'block';
+  });
+
   const syncMemberPlanetMember = OspUtil.oneInstanceRunWrapper(async () => {
     OspUtil.log('syncMemberPlanetMember called');
     let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
@@ -282,8 +366,17 @@ const Popup = () => {
         {ospInfoText2}
       </div>
       <div className="mpsync-container">
+        <CSVDownloader
+          type={'button'}
+          filename={'OspToGiveBackUpload'}
+          bom={true}
+          config={{
+            delimiter: ',',
+          }}
+          data={getGiveBacksMemberUploadCsv}
+        >Download GiveBacks UploadCsv</CSVDownloader>
         Execute Delay<input value={waitEleDelay} onChange={e => setWaitEleDelay(e.target.value)} />Second
-        <Button onClick={syncMemberPlanetMember}>Sync Members</Button>
+        <Button onClick={syncGiveBacksMember}>Sync Members</Button>
       </div>
       <div className="mplist-container">
         <div>
@@ -330,6 +423,7 @@ const Popup = () => {
           </div>
         </div>
         <div>
+          <div id='batchVoidGiveBackDiv'><Button onClick={voidGiveBacksMember}>Batch Void Members</Button></div>
           <div>
             <LoadGridButton onClick={loadGiveBacksMember}>Load GiveBacks Members</LoadGridButton>
             <span>{mpMemberLastUpdateInfo}</span>

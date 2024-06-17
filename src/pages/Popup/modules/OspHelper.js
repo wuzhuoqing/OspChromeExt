@@ -592,6 +592,11 @@ class SyncHelper {
   constructor(curTabId, extraWaitTimeMs) {
     this.browserExtHelper = new BrExtHelper(curTabId);
     this.browserExtHelper.setExtraWaitTimeMs(extraWaitTimeMs);
+    this.currentTabHost = '';
+  }
+
+  setHostBase(host) {
+    this.currentTabHost = host;
   }
 
   abandonRemainingRequests() {
@@ -733,7 +738,7 @@ class SyncHelper {
     await this.browserExtHelper.pageAction(async () => await this.browserExtHelper.clickElm('a#ctl00_ContentPlaceHolder_gridForms_ctl00_ctl04_lnkMemberDetails', 'MAIN'));
     await this.setMembershipLevel(1);
     if (!OspUtil.strEqualIgnoreCase(ospMember.FirstName, mpMember.FirstName) || !OspUtil.strEqualIgnoreCase(ospMember.LastName, mpMember.LastName)) {
-      await this.setMemberType(ospMember.IsStudent ? 'Student' : 'Parent / Guardian', ospMember.FirstName, ospMember.LastName);
+      await this.setMemberType(ospMember.IsStudent ? 'Student' : 'Parent/Guardian', ospMember.FirstName, ospMember.LastName);
     }
     if (!OspUtil.strEqualIgnoreCase('[Restricted]', mpMember.Address)) {
       if (!OspUtil.strEqualIgnoreCase(ospMember.Address, mpMember.Address)) {
@@ -741,6 +746,72 @@ class SyncHelper {
       }
     }
   }
+
+  async addNewGiveBacksMember(ospMember, reinitPage) {
+    if (reinitPage) {
+      // await this.browserExtHelper.ajaxAction('https://api.memberhub.com/services/memberhub-service/memberships', async () => await this.browserExtHelper.gotoUrl(`https://${this.currentTabHost}/memberships?status=active&limit=50`));
+      await this.browserExtHelper.gotoUrl(`https://${this.currentTabHost}/memberships?status=active&limit=50`);
+    }
+
+    const firstName = ospMember.FirstName;
+    const lastName = ospMember.LastName;
+    const email = ospMember.Email ? ospMember.Email.trim() : '';
+    const isStudent = ospMember.IsStudent;
+    const memberType = isStudent ? 'Student' : 'Parent/Guardian';
+    // click the Add cash member button
+    await this.browserExtHelper.clickElm('div.MemberHub-Page__Top > div.MemberHub-Page__Header > button:enabled', 'MAIN')
+    // wait for option to populate
+    await this.browserExtHelper.waitForElm('div.MemberHub-Modal__Section #Select-Item > option:nth-child(2)')
+    await this.browserExtHelper.waitForElm('div.modal-footer > button.MemberHub-Button-primary.btn-primary:enabled');
+    // select item type with memberType
+    await this.browserExtHelper.selectOptionByText('div.MemberHub-Modal__Section #Select-Item', memberType);
+    // select memberType and info
+    await this.browserExtHelper.selectOptionByText('div.MemberHub-Modal__Section #Member-type', memberType);
+    await this.browserExtHelper.setCheckboxState("div.MemberHub-Modal__Section div.MemberHub-CheckboxGroup__Input > input:enabled", false);
+    await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#First-name:enabled", firstName);
+    await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#Last-name:enabled", lastName);
+    await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#Email:enabled", email);
+    // click Save
+    await this.browserExtHelper.ajaxAction('https://api.memberhub.com/services/memberhub-service/memberships', async () => await this.browserExtHelper.clickElm('div.modal-footer > button.MemberHub-Button-primary.btn-primary', 'MAIN'));
+  }
+}
+
+export async function syncGiveBacksMember(currentTabHost, memberToUploadList, extraWaitTimeMs, updateStatusFunc, updateErrorFunc) {
+  const currentTabId = await BrExtHelper.getCurrentTabId();
+  const errorMsgs = [];
+  let reinitPage = true;
+  for (const [memberIndex, member] of memberToUploadList.entries()) {
+    const memberInfo = `${member.FirstName} ${member.LastName} ${member.Email} (${memberIndex + 1} of ${memberToUploadList.length})`;
+    let actionInfo = '';
+    const syncHelper = new SyncHelper(currentTabId, parseInt(extraWaitTimeMs));
+    syncHelper.setHostBase(currentTabHost);
+    try {
+      OspUtil.log(`process ${memberInfo}`, member)
+      await OspUtil.asyncCallWithTimeout(async () => {
+        if (member.Status === MemberHelper.MPSyncStatus.NeedToAdd) {
+          actionInfo = 'add new member';
+          updateStatusFunc(`begin to ${actionInfo} ${memberInfo}`);
+          await syncHelper.addNewGiveBacksMember(member, reinitPage);
+          reinitPage = false;
+        }
+        // if (member.Status === MemberHelper.MPSyncStatus.NeedToRenew) {
+        //   actionInfo = 'renew existing member';
+        //   updateStatusFunc(`begin to ${actionInfo} ${memberInfo}`);
+        //   await syncHelper.renewMember(member, member.MatchedMPMember);
+        // }
+      }, 60000);
+    }
+    catch (err) {
+      reinitPage = true;
+      OspUtil.error(`Failed to ${actionInfo} ${memberInfo}`, err);
+      syncHelper.abandonRemainingRequests();
+      const errInfo = `Failed to ${actionInfo} ${memberInfo} ${err}`;
+      updateErrorFunc(`Last error: ${errInfo}`);
+      errorMsgs.push(errInfo);
+    }
+  }
+  updateStatusFunc('end of sync members');
+  return errorMsgs.join(', ');
 }
 
 export async function syncMemberPlanetMember(memberToUploadList, extraWaitTimeMs, updateStatusFunc, updateErrorFunc) {

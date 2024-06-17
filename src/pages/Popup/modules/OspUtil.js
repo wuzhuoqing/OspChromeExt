@@ -67,6 +67,17 @@ export function extractNumberFromString(str) {
   return -1;
 }
 
+export function getCurrentGiveBacksShoolYear() {
+  let schoolYear = new Date().getFullYear();
+  // 0 base, 5 is june
+  const schoolMonth = new Date().getMonth();
+  if (schoolMonth > 5) {
+    return schoolYear + 1;
+  } else {
+    return schoolYear;
+  }
+}
+
 export function getHost(urlStr) {
   if (URL.canParse(urlStr)) {
     const url = new URL(urlStr);
