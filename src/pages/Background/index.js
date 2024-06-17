@@ -5,13 +5,19 @@ log('Put the background scripts here changed.');
 function sendDataUpdateMsg() {
     log("sending memberList called");
     chrome.storage.local.get(['ospMemberList', 'mpMemberList']).then((result) => {
-        let ospMemberList = [];
-        if (result.ospMemberList && result.ospMemberList.length && result.ospMemberList.length > 0) {
+        let ospMemberList = {
+            lastUpdate: 0,
+            memberList: []
+        };
+        if (result.ospMemberList && result.ospMemberList.memberList && result.ospMemberList.memberList.length && result.ospMemberList.memberList.length > 0) {
             ospMemberList = result.ospMemberList;
         }
 
-        let mpMemberList = [];
-        if (result.mpMemberList && result.mpMemberList.length && result.mpMemberList.length > 0) {
+        let mpMemberList = {
+            lastUpdate: 0,
+            memberList: []
+        };
+        if (result.mpMemberList && result.mpMemberList.memberList && result.mpMemberList.memberList.length && result.mpMemberList.memberList.length > 0) {
             mpMemberList = result.mpMemberList;
         }
 
@@ -29,8 +35,8 @@ async function bgHandleMessages(message) {
     log("bgHandleMessages called");
 
     let memberListUpdate = false;
-    if (message.MemberPlanetMemberList) {
-        await chrome.storage.local.set({ mpMemberList: message.MemberPlanetMemberList }).then(() => {
+    if (message.MPMemberList) {
+        await chrome.storage.local.set({ mpMemberList: message.MPMemberList }).then(() => {
             log("mpMemberList is saved");
         });
         memberListUpdate = true;

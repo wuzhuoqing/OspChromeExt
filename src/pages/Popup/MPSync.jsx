@@ -72,19 +72,21 @@ const Popup = () => {
 
   const ospGridRef = useRef();
   const [rowDataOspCsv, setRowDataOspCSv] = useState([]);
+  const [rowDataMpCsv, setRowDataMpCSv] = useState([]);
+
   const [rowDataOsp, setRowDataOsp] = useState([]);
   const [columnDefsOsp, setColumnDefsOsp] = useState([
     { field: 'ID', headerCheckboxSelection: true, checkboxSelection: true },
     { field: 'Status', cellRenderer: statusCellRenderer },
     { field: 'Email', filter: true },
-    { field: 'MPIDString', headerName: 'MPID' },
+    //{ field: 'MPIDString', headerName: 'MPID' },
     { field: 'FirstName', filter: true },
     { field: 'LastName', filter: true },
     { field: 'IsStudent', filter: true },
     { field: 'Address', filter: true },
-    { field: 'City', filter: true },
-    { field: 'ZipCode', filter: true },
-    { field: 'State' },
+    //{ field: 'City', filter: true },
+    //{ field: 'ZipCode', filter: true },
+    //{ field: 'State' },
   ]);
   const getRowIdOsp = useMemo(() => {
     return (params) => params.data.ID;
@@ -97,33 +99,46 @@ const Popup = () => {
 
   const [ospInfoText1, setOspInfoText1] = useState('');
   const [ospInfoText2, setOspInfoText2] = useState('');
+  const [ospMemberLastUpdateInfo, setOspMemberLastUpdateInfo] = useState('');
+  const [mpMemberLastUpdateInfo, setMpMemberLastUpdateInfo] = useState('');
+
   const [rowDataMp, setRowDataMp] = useState([]);
   const [columnDefsMp, setColumnDefsMp] = useState([
-    { field: 'MPID', headerCheckboxSelection: true, checkboxSelection: true },
+    { field: 'ID', headerCheckboxSelection: true, checkboxSelection: true },
     { field: 'Status', cellRenderer: statusCellRenderer },
     { field: 'Email', filter: true },
     { field: 'FirstName', filter: true },
     { field: 'LastName', filter: true },
-    { field: 'Address', filter: true },
-    { field: 'IsActive' },
-    { field: 'MemberLevel' },
+    { field: 'MemberType', filter: true },
+    //{ field: 'IsActive' },
+    //{ field: 'MemberLevel' },
   ]);
 
   const getRowIdMp = useMemo(() => {
-    return (params) => params.data.MPID;
+    return (params) => params.data.ID;
   }, []);
 
   function popupHandleMessages(message) {
     if (message.MemberListUpdated) {
       OspUtil.log('popup got data refreshed', message);
-      MemberHelper.cleanAndMatchOspMpMembers(message.ospMemberList, message.mpMemberList);
+      let ospMemberList = message.ospMemberList.memberList;
+      let mpMemberList = message.mpMemberList.memberList;
+      MemberHelper.cleanAndMatchOspMpMembers(ospMemberList, mpMemberList);
       // don't show inactive MP members which is not going to be renewed. Can have a lot.
-      message.mpMemberList = message.mpMemberList.filter(m => m.IsActive || m.Status !== MemberHelper.MPSyncStatus.Extra);
-      const ospMemberToUpload = MemberHelper.getOspMemberToUpload(message.ospMemberList);
-      const ospWarningMsg = MemberHelper.getExtraMemberWarningMsg(message.ospMemberList);
-      const mpWarningMsg = MemberHelper.getExtraMemberWarningMsg(message.mpMemberList);
+      mpMemberList = mpMemberList.filter(m => m.IsActive || m.Status !== MemberHelper.MPSyncStatus.Extra);
+      const ospMemberToUpload = MemberHelper.getOspMemberToUpload(ospMemberList);
+      const ospWarningMsg = MemberHelper.getExtraMemberWarningMsg(ospMemberList);
+      const mpWarningMsg = MemberHelper.getExtraMemberWarningMsg(mpMemberList);
 
       setOspInfoText1(`${ospMemberToUpload.length} OSP member to be uploaded`)
+
+      if (message.ospMemberList.lastUpdate > 0) {
+        setOspMemberLastUpdateInfo(`lastUpdate ${(new Date(message.ospMemberList.lastUpdate)).toLocaleString()}`)
+      }
+
+      if (message.mpMemberList.lastUpdate > 0) {
+        setMpMemberLastUpdateInfo(`lastUpdate ${(new Date(message.mpMemberList.lastUpdate)).toLocaleString()}`)
+      }
 
       if (ospWarningMsg || mpWarningMsg) {
         const ospInfo = 'Find duplicate members in OSP, please sort by Status column to check and take actions directly on  if needed.';
@@ -132,15 +147,44 @@ const Popup = () => {
         setOspInfoText2(`${ospWarningMsg ? 'OSP Details:' : ''} ${ospWarningMsg} ${mpWarningMsg ? 'MP Details:' : ''} ${mpWarningMsg}`);
       }
 
-      setRowDataMp(message.mpMemberList);
-      setRowDataOsp(message.ospMemberList);
+      setRowDataMp(mpMemberList);
+      setRowDataOsp(ospMemberList);
     }
   }
 
   function saveOspCSV() {
     OspUtil.log('rowDataOspCsv', rowDataOspCsv);
+    const rowsPatched = [];
+    for (const [index, row] of rowDataOspCsv.entries()) {
+      rowsPatched.push({ ...row, IsStudent: OspUtil.strEqualIgnoreCase(row.MemberType, 'Student') })
+    }
+
+    document.getElementById('OspCsvImportCheckbox').checked = false;
+    document.querySelector('div#OspCsvImport').style.display = 'none';
     chrome.runtime.sendMessage({
-      OSPMemberList: rowDataOspCsv
+      OSPMemberList: {
+        lastUpdate: Date.now(),
+        memberList: rowsPatched
+      }
+    });
+  }
+
+  function saveMpCSV() {
+    OspUtil.log('rowDataMpCsv', rowDataMpCsv);
+    const rowsPatched = [];
+    for (const [index, row] of rowDataMpCsv.entries()) {
+      // GiveBack voided member doesn't count
+      if (!OspUtil.strEqualIgnoreCase(row.MemberStatus, 'Voided')) {
+        rowsPatched.push(MemberHelper.patchMpMember(row));
+      }
+    }
+    document.getElementById('MpCsvImportCheckbox').checked = false;
+    document.querySelector('div#MpCsvImport').style.display = 'none';
+    chrome.runtime.sendMessage({
+      MPMemberList: {
+        lastUpdate: Date.now(),
+        memberList: rowsPatched
+      }
     });
   }
 
@@ -159,6 +203,20 @@ const Popup = () => {
     setOspInfoText1('loading OSPMember...');
     const statusMsg = await OspHelper.loadOSPMember();
     setOspInfoText1(`load OSPMember End. ${statusMsg}`);
+  });
+
+  const loadGiveBacksMember = OspUtil.oneInstanceRunWrapper(async () => {
+    const currentTabUrl = await BrExtHelper.getCurrentTabUrl();
+    const currentTabHost = OspUtil.getHost(currentTabUrl);
+    if (!currentTabHost.toLowerCase().endsWith(OspHelper.GB_HostSuffix)) {
+      setOspInfoWarning1(`not on ${OspHelper.GB_HostSuffix}`);
+      setOspInfoText1(`tabUrl is "${currentTabUrl}"`);
+      return;
+    }
+
+    setOspInfoText1('loading GiveBacks Member...');
+    const statusMsg = await OspHelper.loadGiveBacksMember();
+    setOspInfoText1(`load GiveBacks Member End. ${statusMsg}`);
   });
 
   const loadMemberPlanetMember = OspUtil.oneInstanceRunWrapper(async () => {
@@ -184,8 +242,8 @@ const Popup = () => {
     setOspInfoText1(statusMsg);
   });
 
-  const syncMember = OspUtil.oneInstanceRunWrapper(async () => {
-    OspUtil.log('syncMember called');
+  const syncMemberPlanetMember = OspUtil.oneInstanceRunWrapper(async () => {
+    OspUtil.log('syncMemberPlanetMember called');
     let currentTabUrl = await BrExtHelper.getCurrentTabUrl();
     if (!currentTabUrl.toLowerCase().startsWith(OspHelper.MP_BaseUrl)) {
       setOspInfoWarning1(`not on ${OspHelper.MP_BaseUrl}`);
@@ -204,7 +262,7 @@ const Popup = () => {
     let gridContainer = document.querySelector('div.mplist-container');
     gridContainer.style.display = 'none';
 
-    let processMsg = await OspHelper.syncMember(ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
+    let processMsg = await OspHelper.syncMemberPlanetMember(ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
     setOspInfoWarning2(processMsg);
     setOspInfoWarning1(`MP member status may be changed now. Please go to memberplanet member page and reload member list to refresh status`);
     gridContainer.style.display = 'block';
@@ -225,14 +283,14 @@ const Popup = () => {
       </div>
       <div className="mpsync-container">
         Execute Delay<input value={waitEleDelay} onChange={e => setWaitEleDelay(e.target.value)} />Second
-        <Button onClick={syncMember}>Sync Members</Button>
-        <Button onClick={updateOSPMemberMPID}>Update OSP MPIDs</Button>
+        <Button onClick={syncMemberPlanetMember}>Sync Members</Button>
       </div>
       <div className="mplist-container">
         <div>
           <div>
             <LoadGridButton onClick={loadOSPMember}>Load OSP Members</LoadGridButton>
-            <input type='checkbox' value={false} onChange={e => document.querySelector('div#OspCsvImport').style.display = document.querySelector('div#OspCsvImport').style.display === 'block' ? 'none' : 'block'} />UseCsv
+            <span>{ospMemberLastUpdateInfo}</span>
+            <input id='OspCsvImportCheckbox' type='checkbox' value={false} onChange={e => document.querySelector('div#OspCsvImport').style.display = document.querySelector('div#OspCsvImport').style.display === 'block' ? 'none' : 'block'} />UseCsv
             <div id='OspCsvImport' style={{ display: "none" }}>
               <Importer
                 dataHandler={async (rows, { startIndex }) => {
@@ -246,15 +304,9 @@ const Popup = () => {
                 onClose={saveOspCSV}
               >
                 <ImporterField name="Email" label="Email" />
-                <ImporterField name="FirstName" label="FirstName" />
-                <ImporterField name="LastName" label="LastName" />
-                <ImporterField name="IsStudent" label="IsStudent" />
-                <ImporterField name="MPIDString" label="MPID" optional />
-                <ImporterField name="ID" label="ID" optional />
-                <ImporterField name="Address" label="Address" optional />
-                <ImporterField name="City" label="City" optional />
-                <ImporterField name="ZipCode" label="ZipCode" optional />
-                <ImporterField name="State" label="State" optional />
+                <ImporterField name="FirstName" label="First Name" />
+                <ImporterField name="LastName" label="Last Name" />
+                <ImporterField name="MemberType" label="Member Type" />
               </Importer>
             </div>
           </div>
@@ -279,7 +331,28 @@ const Popup = () => {
         </div>
         <div>
           <div>
-            <LoadGridButton onClick={loadMemberPlanetMember}>Load MP Members</LoadGridButton>
+            <LoadGridButton onClick={loadGiveBacksMember}>Load GiveBacks Members</LoadGridButton>
+            <span>{mpMemberLastUpdateInfo}</span>
+            <input id='MpCsvImportCheckbox' type='checkbox' value={false} onChange={e => document.querySelector('div#MpCsvImport').style.display = document.querySelector('div#MpCsvImport').style.display === 'block' ? 'none' : 'block'} />UseCsv
+            <div id='MpCsvImport' style={{ display: "none" }}>
+              <Importer
+                dataHandler={async (rows, { startIndex }) => {
+                  OspUtil.log('MpCsvImport', rows, startIndex);
+                  const rowsWithId = [];
+                  for (const [index, row] of rows.entries()) {
+                    rowsWithId.push({ ...row, ID: startIndex + index + 1 })
+                  }
+                  setRowDataMpCSv(oldArray => [...oldArray, ...rowsWithId])
+                }}
+                onClose={saveMpCSV}
+              >
+                <ImporterField name="Email" label="Email" />
+                <ImporterField name="FirstName" label="First Name" />
+                <ImporterField name="LastName" label="Last Name" />
+                <ImporterField name="MemberType" label="Member Type" />
+                <ImporterField name="MemberStatus" label="Status" />
+              </Importer>
+            </div>
           </div>
           <div style={gridStyle}
             className={

@@ -46,6 +46,18 @@ function trimAndFixFields(member) {
   member.ComplexHashKey = getComplexHashKey(member);
 }
 
+export function patchMpMember(mpMember) {
+  return { ...mpMember, IsStudent: OspUtil.strEqualIgnoreCase(mpMember.MemberType, 'Student'), IsActive: true, MemberLevel: 'ActiveMember' }
+}
+
+
+export function patchOspMember(ospMember) {
+  if (OspUtil.isNullOrWhiteSpace(ospMember.Email)) {
+    ospMember.Email = `u${ospMember.dbID}_${ospMember.IsStudent ? 's' : 'p'}@ewaeh.org`;
+  }
+  return ospMember;
+}
+
 export function isCurrentPaidMember(mpMember) {
   return mpMember.IsActive && mpMember.MemberLevel;
 }

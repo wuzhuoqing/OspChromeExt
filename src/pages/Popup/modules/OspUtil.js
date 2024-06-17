@@ -67,6 +67,15 @@ export function extractNumberFromString(str) {
   return -1;
 }
 
+export function getHost(urlStr) {
+  if (URL.canParse(urlStr)) {
+    const url = new URL(urlStr);
+    return url.host;
+  } else {
+    return '';
+  }
+}
+
 export function extractFloat(str) {
   const ret = parseFloat(str);
   if (isNaN(ret)) {

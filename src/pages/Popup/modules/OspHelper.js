@@ -9,6 +9,8 @@ export const MP_quickAddMembersUrl = "https://www.memberplanet.com/Members/Quick
 export const MP_memberDetailsUrl = 'https://www.memberplanet.com/Members/MemberDetails.aspx';
 export const MP_APISearchUrl = 'https://api.memberplanet.com/api/Member/MemberDatabaseSearch';
 
+export const GB_HostSuffix = '.givebacks.com';
+
 async function queryOSPMemberInContent() {
   console.log('queryOSPMemberInContent called');
 
@@ -67,8 +69,16 @@ export async function loadOSPMember() {
   if (result) {
     statusMsg = result.statusMsg;
     if (result.memberList && result.memberList.length > 0) {
+      const rowsPatched = [];
+      for (const [index, row] of result.memberList.entries()) {
+        // we only ask for active GiveBackmembers
+        rowsPatched.push(MemberHelper.patchOspMember(row));
+      }
       chrome.runtime.sendMessage({
-        OSPMemberList: result.memberList
+        OSPMemberList: {
+          lastUpdate: Date.now(),
+          memberList: rowsPatched
+        }
       });
     }
   }
@@ -285,8 +295,164 @@ export async function loadMemberPlanetMember() {
   if (result) {
     statusMsg = result.statusMsg;
     if (result.memberList && result.memberList.length > 0) {
+      const rowsPatched = [];
+      for (const [index, row] of result.memberList.entries()) {
+        // we only ask for active GiveBackmembers
+        //rowsPatched.push(MemberHelper.patchMpMember(row));
+        rowsPatched.push(row);
+      }
       chrome.runtime.sendMessage({
-        MemberPlanetMemberList: result.memberList
+        MPMemberList: {
+          lastUpdate: Date.now(),
+          memberList: rowsPatched
+        }
+      });
+    }
+  }
+  return statusMsg;
+}
+
+async function queryGiveBacksMemberInContent() {
+
+  function sleepAsync(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  console.log('queryGiveBacksMemberInContent called')
+
+  let ret = {
+    memberList: [],
+    statusMsg: 'Fail to load GiveBacks Member'
+  };
+
+  if (!window.localStorage || !window.localStorage.gb_session || !window.location.host) {
+    return ret;
+  }
+
+  const appData = JSON.parse(window.localStorage.gb_session);
+  if (!appData.token || !appData.secret) {
+    return ret;
+  }
+
+  const hostPrefix = window.location.host.split('.')[0]
+
+  console.log('queryGiveBacksMemberInContent appData.accessToken found');
+  let errorInFetchOrgId = false;
+  // cannot use MP_APISearchUrl here as it is passed to another page
+  const orgIdResponseObj = await fetch('https://api.givebacks.com/services/core/causes/' + hostPrefix, {
+    method: 'GET',
+    //body: JSON.stringify(requestObj),
+    headers: {
+      //'Content-Type': 'application/json',
+      'Authentication-Session-Token': appData.token,
+      'Authentication-Session-Secret': appData.secret
+    }
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Fail to query GiveBacks. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .catch(error => {
+      console.error(error);
+      ret.statusMsg = ret.statusMsg + `${err}`;
+      errorInFetchOrgId = true;
+    });
+
+  if (errorInFetchOrgId || !orgIdResponseObj || !orgIdResponseObj.cause || !orgIdResponseObj.cause.memberhub_id) {
+    // not getting back correct response
+    return ret;
+  }
+
+  const memberHubId = orgIdResponseObj.cause.memberhub_id;
+  console.log('queryGiveBacksMemberInContent memberhub_id found', memberHubId);
+
+  let pageNumIndex = 0;
+  let getOffset = 0;
+  while (true) {
+    let errorInFetch = false;
+    // cannot use MP_APISearchUrl here as it is passed to another page
+    let fetchUrl = 'https://api.memberhub.com/services/memberhub-service/memberships?status=active&limit=50&organization_uuid=' + memberHubId;
+    if (getOffset > 0) {
+      fetchUrl = 'https://api.memberhub.com/services/memberhub-service/memberships?status=active&limit=50&offset=' + getOffset + '&organization_uuid=' + memberHubId;
+    }
+    console.log('queryGiveBacksMemberInContent prepare call', fetchUrl)
+    const responseObj = await fetch(fetchUrl, {
+      method: 'GET',
+      //body: JSON.stringify(requestObj),
+      headers: {
+        //'Content-Type': 'application/json',
+        'Authentication-Session-Token': appData.token,
+        'Authentication-Session-Secret': appData.secret
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Fail to query MemberPlanet. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .catch(error => {
+        console.error(error);
+        ret.statusMsg = ret.statusMsg + `${err}`;
+        errorInFetch = true;
+      });
+
+    if (errorInFetch || !responseObj || !responseObj.memberships || !responseObj.meta || responseObj.memberships.length !== responseObj.meta.count) {
+      // not getting back correct response
+      return ret;
+    }
+
+    for (const member of responseObj.memberships) {
+      if (member.options) {
+        ret.memberList.push({
+          ID: member.user_id,
+          FirstName: member.options.first_name,
+          LastName: member.options.last_name,
+          Email: member.options.email,
+          MemberType: member.options.member_type
+        });
+      }
+    }
+
+    getOffset = getOffset + responseObj.meta.count;
+    // limit to max 100 K members.
+    if (!responseObj.meta.has_more || pageNumIndex >= 1000) {
+      console.log('queryGiveBacksMemberInContent ending call. current pageNumIndex', pageNumIndex)
+      break;
+    }
+    console.log('queryGiveBacksMemberInContent prepare next call. current pageNumIndex', pageNumIndex)
+
+    await sleepAsync(50);
+    pageNumIndex++;
+  }
+
+  console.log('end of queryGiveBacksMemberInContent');
+  ret.statusMsg = 'Success';
+  return ret;
+}
+
+export async function loadGiveBacksMember() {
+  OspUtil.log("loadGiveBacksMember called");
+
+  const currentTabId = await BrExtHelper.getCurrentTabId();
+  const browserExtHelper = new BrExtHelper(currentTabId);
+  const result = await browserExtHelper.executeFuncInContent(queryGiveBacksMemberInContent);
+  let statusMsg = '';
+  if (result) {
+    statusMsg = result.statusMsg;
+    if (result.memberList && result.memberList.length > 0) {
+      const rowsPatched = [];
+      for (const [index, row] of result.memberList.entries()) {
+        // we only ask for active GiveBackmembers
+        rowsPatched.push(MemberHelper.patchMpMember(row));
+      }
+      chrome.runtime.sendMessage({
+        MPMemberList: {
+          lastUpdate: Date.now(),
+          memberList: rowsPatched
+        }
       });
     }
   }
@@ -460,7 +626,7 @@ class SyncHelper {
     let firstName = ospMember.FirstName;
     let lastName = ospMember.LastName;
     let email = ospMember.Email ? ospMember.Email.trim() : '';
-    let dummyEmail = `u${ospMember.ID}_${ospMember.IsStudent ? 's' : 'p'}@ewaeh.org`;
+    let dummyEmail = `u${ospMember.dbID}_${ospMember.IsStudent ? 's' : 'p'}@ewaeh.org`;
     let isStudent = ospMember.IsStudent;
     let streetAddress = ospMember.Address;
     let city = ospMember.City;
@@ -577,7 +743,7 @@ class SyncHelper {
   }
 }
 
-export async function syncMember(memberToUploadList, extraWaitTimeMs, updateStatusFunc, updateErrorFunc) {
+export async function syncMemberPlanetMember(memberToUploadList, extraWaitTimeMs, updateStatusFunc, updateErrorFunc) {
   const currentTabId = await BrExtHelper.getCurrentTabId();
   const errorMsgs = [];
   for (const [memberIndex, member] of memberToUploadList.entries()) {
