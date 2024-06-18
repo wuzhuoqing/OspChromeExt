@@ -22,6 +22,28 @@ async function waitForElmInContent(selector) {
   return selector;
 }
 
+async function waitForElmDisappearInContent(selector) {
+  let elePromise = new Promise(resolve => {
+    if (!document.querySelector(selector)) {
+      return resolve();
+    }
+
+    const observer = new MutationObserver(mutations => {
+      if (!document.querySelector(selector)) {
+        observer.disconnect();
+        resolve();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  });
+  await elePromise;
+  return selector;
+}
+
 async function clickElmInContent(selector) {
   // console.log('clicking', selector);
   let ele = document.querySelector(selector);
@@ -146,7 +168,7 @@ function getBrowserNextCompletePromise(curTabId) {
   let onUpdate;
   return new Promise((resolve) => {
     onUpdate = (tabId, info) => {
-      OspUtil.log("tab onUpdated called called", info);
+      OspUtil.log("tab onUpdated called", info);
       if (tabId === curTabId && info.status === "complete") {
         resolve();
       }
@@ -159,7 +181,7 @@ function getRequestNextCompletePromise(curTabId, targetUrl) {
   let onCompleted;
   return new Promise((resolve) => {
     onCompleted = (details) => {
-      OspUtil.log("webrequest onCompleted called called", details);
+      OspUtil.log("webrequest onCompleted called", details);
       resolve();
     };
     chrome.webRequest.onCompleted.addListener(onCompleted, { urls: [targetUrl] });
@@ -223,6 +245,13 @@ export default class BrExtHelper {
     return ret;
   }
 
+  async waitForElmDisappear(selector) {
+    await this.executeFuncInContent(waitForElmDisappearInContent, [selector])
+
+    if (this.extraWaitTimeMs > 0) {
+      await OspUtil.sleep(this.extraWaitTimeMs);
+    }
+  }
 
   async waitForElm(selector) {
     await this.executeFuncInContent(waitForElmInContent, [selector])

@@ -312,17 +312,16 @@ export async function loadMemberPlanetMember() {
   return statusMsg;
 }
 
-async function queryGiveBacksMemberInContent() {
+async function queryGiveBacksHubTokenInfoInContent() {
 
-  function sleepAsync(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  console.log('queryGiveBacksMemberInContent called')
+  console.log('queryGiveBacksHubTokenInfoInContent called')
 
   let ret = {
-    memberList: [],
-    statusMsg: 'Fail to load GiveBacks Member'
+    appToken: '',
+    appSecret: '',
+    memberHubId: '',
+    hostPrefix: '',
+    statusMsg: 'Fail to get memberHubId'
   };
 
   if (!window.localStorage || !window.localStorage.gb_session || !window.location.host) {
@@ -334,9 +333,9 @@ async function queryGiveBacksMemberInContent() {
     return ret;
   }
 
-  const hostPrefix = window.location.host.split('.')[0]
+  const hostPrefix = window.location.host.split('.')[0];
 
-  console.log('queryGiveBacksMemberInContent appData.accessToken found');
+  console.log('queryGiveBacksHubTokenInfoInContent appData.accessToken found', hostPrefix);
   let errorInFetchOrgId = false;
   // cannot use MP_APISearchUrl here as it is passed to another page
   const orgIdResponseObj = await fetch('https://api.givebacks.com/services/core/causes/' + hostPrefix, {
@@ -352,6 +351,7 @@ async function queryGiveBacksMemberInContent() {
       if (!response.ok) {
         throw new Error(`Fail to query GiveBacks. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
       }
+      //console.log('queryGiveBacksHubTokenInfoInContent query cause', response.status, response.statusText);
       return response.json();
     })
     .catch(error => {
@@ -362,11 +362,80 @@ async function queryGiveBacksMemberInContent() {
 
   if (errorInFetchOrgId || !orgIdResponseObj || !orgIdResponseObj.cause || !orgIdResponseObj.cause.memberhub_id) {
     // not getting back correct response
+    console.log('queryGiveBacksHubTokenInfoInContent query fail', errorInFetchOrgId, orgIdResponseObj);
     return ret;
   }
 
-  const memberHubId = orgIdResponseObj.cause.memberhub_id;
-  console.log('queryGiveBacksMemberInContent memberhub_id found', memberHubId);
+  ret.memberHubId = orgIdResponseObj.cause.memberhub_id;
+  ret.appToken = appData.token;
+  ret.appSecret = appData.secret;
+  ret.hostPrefix = hostPrefix;
+  console.log('queryGiveBacksHubTokenInfoInContent memberhub_id found', ret.memberHubId);
+  return ret;
+}
+
+async function voidGiveBacksMemberInContent(hubToken, userid, userUUID) {
+
+  let ret = {
+    statusMsg: 'Fail to delete GiveBacks Member'
+  };
+
+  //DELETE https://api.memberhub.com/services/memberhub-service/memberships/13cef260-f452-4e4a-9392-1501b261a677?organization_uuid=d5994ad6-3f01-43ca-ba3f-0f17abce4a60&membership[deleted_at]=Mon%20Jun%2017%202024%2015:58:23%20GMT-0700%20(Pacific%20Daylight%20Time) HTTP/1.1
+  const memberHubId = hubToken.memberHubId;
+  const fetchUrl = 'https://api.memberhub.com/services/memberhub-service/memberships/' + userUUID + '?organization_uuid=' + memberHubId + '&membership[deleted_at]=' + encodeURIComponent(`${new Date()}`);
+  console.log('voidGiveBacksMemberInContent prepare call', fetchUrl);
+  let errorInFetch = false;
+  const responseObj = await fetch(fetchUrl, {
+    method: 'DELETE',
+    //body: JSON.stringify(requestObj),
+    headers: {
+      //'Content-Type': 'application/json',
+      'Authentication-Session-Token': hubToken.appToken,
+      'Authentication-Session-Secret': hubToken.appSecret
+    }
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Fail to delete member. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .catch(error => {
+      console.error(error);
+      ret.statusMsg = ret.statusMsg + `${err}`;
+      errorInFetch = true;
+    });
+
+  if (errorInFetch || !responseObj || !responseObj.membership) {
+    // not getting back correct response
+    ret.statusMsg = `Deleted Response not expected`
+    return ret;
+  }
+  if (!responseObj.membership.user_id || responseObj.membership.user_id !== userid) {
+    // not getting back correct response
+    ret.statusMsg = `Deleted Response UserId not matching ${responseObj.user_id} input ${userid}`
+    return ret;
+  }
+  ret.statusMsg = 'Success';
+  return ret;
+}
+
+async function queryGiveBacksMemberInContent(hubToken) {
+
+  function sleepAsync(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  console.log('queryGiveBacksMemberInContent called')
+
+  let ret = {
+    memberList: [],
+    statusMsg: 'Fail to load GiveBacks Member'
+  };
+
+  const memberHubId = hubToken.memberHubId;
+
+  console.log('queryGiveBacksMemberInContent appData.accessToken found');
 
   let pageNumIndex = 0;
   let getOffset = 0;
@@ -383,13 +452,13 @@ async function queryGiveBacksMemberInContent() {
       //body: JSON.stringify(requestObj),
       headers: {
         //'Content-Type': 'application/json',
-        'Authentication-Session-Token': appData.token,
-        'Authentication-Session-Secret': appData.secret
+        'Authentication-Session-Token': hubToken.appToken,
+        'Authentication-Session-Secret': hubToken.appSecret
       }
     })
       .then(response => {
         if (!response.ok) {
-          throw new Error(`Fail to query MemberPlanet. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
+          throw new Error(`Fail to query GiveBacks. Wrong website?  HTTP status ${response.status} ${response.statusText}`);
         }
         return response.json();
       })
@@ -411,7 +480,8 @@ async function queryGiveBacksMemberInContent() {
           FirstName: member.options.first_name,
           LastName: member.options.last_name,
           Email: member.options.email,
-          MemberType: member.options.member_type
+          MemberType: member.options.member_type,
+          Uuid: member.uuid
         });
       }
     }
@@ -438,11 +508,16 @@ export async function loadGiveBacksMember() {
 
   const currentTabId = await BrExtHelper.getCurrentTabId();
   const browserExtHelper = new BrExtHelper(currentTabId);
-  const result = await browserExtHelper.executeFuncInContent(queryGiveBacksMemberInContent);
+  const hubTokenResult = await browserExtHelper.executeFuncInContent(queryGiveBacksHubTokenInfoInContent);
+  if (!hubTokenResult || !hubTokenResult.memberHubId || !hubTokenResult.appToken || !hubTokenResult.appSecret) {
+    return 'failed to get memberHubId';
+  }
+
+  const result = await browserExtHelper.executeFuncInContent(queryGiveBacksMemberInContent, [hubTokenResult]);
   let statusMsg = '';
   if (result) {
     statusMsg = result.statusMsg;
-    if (result.memberList && result.memberList.length > 0) {
+    if (result.memberList && (result.memberList.length > 0 || result.memberList.length === 0)) {
       const rowsPatched = [];
       for (const [index, row] of result.memberList.entries()) {
         // we only ask for active GiveBackmembers
@@ -457,6 +532,42 @@ export async function loadGiveBacksMember() {
     }
   }
   return statusMsg;
+}
+
+export async function batchVoidGiveBacksMember(gbMemberList, extraWaitTimeMs, updateStatusFunc, updateErrorFunc) {
+  OspUtil.log("batchVoidGiveBacksMember called");
+
+  const currentTabId = await BrExtHelper.getCurrentTabId();
+  const browserExtHelper = new BrExtHelper(currentTabId);
+  const hubTokenResult = await browserExtHelper.executeFuncInContent(queryGiveBacksHubTokenInfoInContent);
+  if (!hubTokenResult || !hubTokenResult.memberHubId || !hubTokenResult.appToken || !hubTokenResult.appSecret) {
+    return 'failed to get memberHubId';
+  }
+
+  let retMsg = ''
+  for (const [memberIndex, member] of gbMemberList.entries()) {
+
+    const memberInfo = `${member.FirstName} ${member.LastName} ${member.Email} (${memberIndex + 1} of ${gbMemberList.length})`;
+    updateStatusFunc(`begin to delete ${memberInfo}`);
+
+    if (!member.Uuid || !member.ID) {
+      updateErrorFunc(`No Uuid to delete ${memberIndex} ID ${member.ID}`);
+      retMsg = retMsg + `No Uuid to delete ${memberIndex} ID ${member.ID}`;
+      continue;
+    }
+    const delRes = await browserExtHelper.executeFuncInContent(voidGiveBacksMemberInContent, [hubTokenResult, member.ID, member.Uuid]);
+    if (!delRes) {
+      updateErrorFunc(`Fail to delete ${memberIndex} ID ${member.ID}`);
+      retMsg = retMsg + `Fail to delete ${memberIndex} ID ${member.ID}`;
+    } else if (delRes.statusMsg !== 'Success') {
+      updateErrorFunc(`Fail to delete ${memberIndex} ID ${member.ID} ${delRes.statusMsg}`);
+      retMsg = retMsg + `Fail to delete ${memberIndex} ID ${member.ID} ${delRes.statusMsg}`;
+    }
+
+    await OspUtil.sleep(extraWaitTimeMs);
+  }
+
+  return retMsg;
 }
 
 async function updateOSPMemberMPIDInContent(mpidUpdateList) {
@@ -771,8 +882,11 @@ class SyncHelper {
     await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#First-name:enabled", firstName);
     await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#Last-name:enabled", lastName);
     await this.browserExtHelper.setElmText("div.MemberHub-Modal__Section input#Email:enabled", email);
-    // click Save
-    await this.browserExtHelper.ajaxAction('https://api.memberhub.com/services/memberhub-service/memberships', async () => await this.browserExtHelper.clickElm('div.modal-footer > button.MemberHub-Button-primary.btn-primary', 'MAIN'));
+    // click Save. somehow we cannot intecept the cross domain request
+    // await this.browserExtHelper.ajaxAction('https://api.memberhub.com/services/memberhub-service/memberships*', async () => await this.browserExtHelper.clickElm('div.modal-footer > button.MemberHub-Button-primary.btn-primary', 'MAIN'));
+    await this.browserExtHelper.clickElm('div.modal-footer > button.MemberHub-Button-primary.btn-primary', 'MAIN')
+    // wait for Save button to disappear
+    await this.browserExtHelper.waitForElmDisappear('div.modal-footer > button.MemberHub-Button-primary.btn-primary');
   }
 }
 

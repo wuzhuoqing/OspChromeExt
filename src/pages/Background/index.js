@@ -9,7 +9,7 @@ function sendDataUpdateMsg() {
             lastUpdate: 0,
             memberList: []
         };
-        if (result.ospMemberList && result.ospMemberList.memberList && result.ospMemberList.memberList.length && result.ospMemberList.memberList.length > 0) {
+        if (result.ospMemberList && result.ospMemberList.memberList && (result.ospMemberList.memberList.length > 0 || result.ospMemberList.memberList.length === 0)) {
             ospMemberList = result.ospMemberList;
         }
 
@@ -17,7 +17,7 @@ function sendDataUpdateMsg() {
             lastUpdate: 0,
             memberList: []
         };
-        if (result.mpMemberList && result.mpMemberList.memberList && result.mpMemberList.memberList.length && result.mpMemberList.memberList.length > 0) {
+        if (result.mpMemberList && result.mpMemberList.memberList && (result.mpMemberList.memberList.length > 0 || result.mpMemberList.memberList.length === 0)) {
             mpMemberList = result.mpMemberList;
         }
 

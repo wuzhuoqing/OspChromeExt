@@ -75,6 +75,7 @@ const Popup = () => {
   const { CSVDownloader } = useCSVDownloader();
 
   const ospGridRef = useRef();
+  const mpGridRef = useRef();
   const [rowDataOspCsv, setRowDataOspCSv] = useState([]);
   const [rowDataMpCsv, setRowDataMpCSv] = useState([]);
 
@@ -194,6 +195,7 @@ const Popup = () => {
 
   function initRunFunc() {
     requestMemberListFromBackgroud();
+    //document.querySelector('div#batchVoidGiveBackDiv').style.display = 'none';
     chrome.runtime.onMessage.addListener(popupHandleMessages);
   }
 
@@ -220,6 +222,11 @@ const Popup = () => {
 
     setOspInfoText1('loading GiveBacks Member...');
     const statusMsg = await OspHelper.loadGiveBacksMember();
+    if (statusMsg === 'Success') {
+      document.querySelector('div#batchVoidGiveBackDiv').style.display = 'block';
+    } else {
+      document.querySelector('div#batchVoidGiveBackDiv').style.display = 'none';
+    }
     setOspInfoText1(`load GiveBacks Member End. ${statusMsg}`);
   });
 
@@ -295,7 +302,7 @@ const Popup = () => {
 
     let processMsg = await OspHelper.syncGiveBacksMember(currentTabHost, ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
     setOspInfoWarning2(processMsg);
-    setOspInfoWarning1(`GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
+    setOspInfoWarning1(`Sync operation done. GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
     gridContainer.style.display = 'block';
   });
 
@@ -313,17 +320,19 @@ const Popup = () => {
     setOspInfoWarning2('');
     setOspInfoText1('');
     setOspInfoText2('');
-    const selectedRowData = ospGridRef.current.api.getSelectedRows();
-    const ospMemberToUpload = MemberHelper.getOspMemberToUpload(selectedRowData);
-    OspUtil.log('ospMemberToUpload', ospMemberToUpload);
+
+    const selectedRowData = mpGridRef.current.api.getSelectedRows();
+    OspUtil.log('gbMemberToVoid', selectedRowData);
 
     let gridContainer = document.querySelector('div.mplist-container');
     gridContainer.style.display = 'none';
 
-    let processMsg = await OspHelper.syncGiveBacksMember(currentTabHost, ospMemberToUpload, OspUtil.extractFloat(waitEleDelay) * 1000, setOspInfoText2, setOspInfoWarning2);
-    setOspInfoWarning2(processMsg);
-    setOspInfoWarning1(`GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
+    let processMsg = await OspHelper.batchVoidGiveBacksMember(selectedRowData, 100, setOspInfoText2, setOspInfoWarning2);
+
     gridContainer.style.display = 'block';
+
+    setOspInfoWarning2(processMsg);
+    setOspInfoWarning1(`Void operation done. GiveBacks member status may be changed now. Please go to GiveBacks member page and reload member list to refresh status`);
   });
 
   const syncMemberPlanetMember = OspUtil.oneInstanceRunWrapper(async () => {
@@ -453,6 +462,7 @@ const Popup = () => {
               "ag-theme-quartz"
             }>
             <AgGridReact
+              ref={mpGridRef}
               autoSizeStrategy={autoSizeStrategy}
               rowData={rowDataMp}
               columnDefs={columnDefsMp}
