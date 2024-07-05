@@ -16,7 +16,7 @@ root.render(
     <React.StrictMode>
         <Tabs>
             <TabList>
-                <Tab>MemberPlanet Sync</Tab>
+                <Tab>WAStatePTA Sync</Tab>
                 <Tab>Bulk Upload User</Tab>
             </TabList>
 
