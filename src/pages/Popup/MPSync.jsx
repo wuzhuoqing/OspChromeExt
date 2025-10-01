@@ -378,7 +378,7 @@ const Popup = () => {
         <CSVDownloader
           type={'button'}
           filename={'OspToGiveBackUpload'}
-          bom={true}
+          bom={false}
           config={{
             delimiter: ',',
           }}
